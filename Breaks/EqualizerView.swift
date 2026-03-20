@@ -12,10 +12,18 @@ struct EqualizerView: View {
 
     var body: some View {
         VStack(spacing: 20) {
+            // Header stripe
+            HStack {
+                Rectangle()
+                    .fill(TR808.accent)
+                    .frame(height: 3)
+            }
+            .padding(.horizontal, 20)
+
             Text("GRAPHIC EQ")
-                .font(.system(size: 14, weight: .bold, design: .monospaced))
-                .foregroundStyle(.secondary)
-                .padding(.top, 16)
+                .font(TR808.label(13))
+                .foregroundStyle(TR808.silver)
+                .tracking(2)
 
             // EQ visualization
             eqCurveView
@@ -39,13 +47,14 @@ struct EqualizerView: View {
                 }
             } label: {
                 Label("Flat", systemImage: "arrow.counterclockwise")
-                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .font(TR808.label(12))
             }
             .buttonStyle(.bordered)
-            .tint(.secondary)
+            .tint(TR808.silverDim)
             .padding(.bottom, 20)
         }
-        .background(Color(.systemBackground))
+        .background(TR808.bg)
+        .preferredColorScheme(.dark)
     }
 
     private var eqCurveView: some View {
@@ -62,7 +71,7 @@ struct EqualizerView: View {
                         path.move(to: CGPoint(x: 0, y: y))
                         path.addLine(to: CGPoint(x: w, y: y))
                     }
-                    .stroke(Color.gray.opacity(db == 0 ? 0.4 : 0.15), lineWidth: db == 0 ? 1 : 0.5)
+                    .stroke(TR808.surfaceLight.opacity(db == 0 ? 0.8 : 0.4), lineWidth: db == 0 ? 1 : 0.5)
                 }
 
                 // EQ curve
@@ -86,9 +95,9 @@ struct EqualizerView: View {
                         }
                     }
                 }
-                .stroke(Color.orange, lineWidth: 2)
+                .stroke(TR808.accent, lineWidth: 2)
 
-                // Filled area under curve
+                // Fill under curve
                 Path { path in
                     let bandCount = engine.eqGains.count
                     path.move(to: CGPoint(x: 0, y: midY))
@@ -112,7 +121,7 @@ struct EqualizerView: View {
                     path.addLine(to: CGPoint(x: w, y: midY))
                     path.closeSubpath()
                 }
-                .fill(Color.orange.opacity(0.15))
+                .fill(TR808.accent.opacity(0.12))
             }
         }
     }
@@ -121,37 +130,34 @@ struct EqualizerView: View {
         VStack(spacing: 6) {
             // dB label
             Text(String(format: "%+.0f", engine.eqGains[band]))
-                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                .foregroundStyle(engine.eqGains[band] == 0 ? Color.secondary : Color.orange)
+                .font(TR808.readout(10))
+                .foregroundStyle(engine.eqGains[band] == 0 ? TR808.silverDim : TR808.accent)
                 .frame(height: 14)
 
             // Vertical slider
             GeometryReader { geo in
-                let range: Float = 24.0 // -12 to +12
+                let range: Float = 24.0
                 let normalized = CGFloat((engine.eqGains[band] + 12.0) / range)
                 let trackHeight = geo.size.height
                 let thumbY = trackHeight * (1 - normalized)
 
                 ZStack(alignment: .bottom) {
-                    // Track background
                     Capsule()
-                        .fill(Color(.systemGray5))
+                        .fill(TR808.surface)
                         .frame(width: 6)
                         .frame(maxHeight: .infinity)
                         .frame(maxWidth: .infinity)
 
-                    // Active fill
                     Capsule()
-                        .fill(Color.orange.opacity(0.6))
+                        .fill(TR808.accent.opacity(0.5))
                         .frame(width: 6, height: max(0, trackHeight * normalized))
                         .frame(maxWidth: .infinity)
                 }
                 .overlay(alignment: .top) {
-                    // Thumb
                     Circle()
-                        .fill(Color.orange)
+                        .fill(TR808.accent)
                         .frame(width: 18, height: 18)
-                        .shadow(color: .orange.opacity(0.3), radius: 4)
+                        .shadow(color: TR808.accent.opacity(0.3), radius: 4)
                         .offset(y: thumbY - 9)
                 }
                 .contentShape(Rectangle())
@@ -169,12 +175,13 @@ struct EqualizerView: View {
 
             // Frequency label
             Text(engine.eqLabels[band])
-                .font(.system(size: 9, weight: .medium, design: .monospaced))
-                .foregroundStyle(.secondary)
+                .font(TR808.readout(9))
+                .foregroundStyle(TR808.silverDim)
         }
     }
 }
 
 #Preview {
     EqualizerView(engine: AudioEngine())
+        .preferredColorScheme(.dark)
 }

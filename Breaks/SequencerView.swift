@@ -15,19 +15,27 @@ struct SequencerView: View {
     @State private var selectedPadIndex: Int? = nil
 
     let columns = [
-        GridItem(.flexible(), spacing: 16),
-        GridItem(.flexible(), spacing: 16),
-        GridItem(.flexible(), spacing: 16),
-        GridItem(.flexible(), spacing: 16),
+        GridItem(.flexible(), spacing: 10),
+        GridItem(.flexible(), spacing: 10),
+        GridItem(.flexible(), spacing: 10),
+        GridItem(.flexible(), spacing: 10),
     ]
 
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
+                // 808 header stripe
+                HStack {
+                    Rectangle()
+                        .fill(TR808.accent)
+                        .frame(height: 3)
+                }
+                .padding(.horizontal, 20)
+
                 Text("SAMPLE PADS")
-                    .font(.system(size: 14, weight: .bold, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 12)
+                    .font(TR808.label(13))
+                    .foregroundStyle(TR808.silver)
+                    .tracking(2)
 
                 LazyVGrid(columns: columns, spacing: 10) {
                     ForEach(0..<engine.padCount, id: \.self) { index in
@@ -40,18 +48,22 @@ struct SequencerView: View {
                     recordingIndicator(padIndex: padIndex)
                 }
 
-                Divider()
-                    .padding(.horizontal, 16)
+                Rectangle()
+                    .fill(TR808.surfaceLight)
+                    .frame(height: 1)
+                    .padding(.horizontal, 20)
 
                 Text("STEP SEQUENCER")
-                    .font(.system(size: 14, weight: .bold, design: .monospaced))
-                    .foregroundStyle(.secondary)
+                    .font(TR808.label(13))
+                    .foregroundStyle(TR808.silver)
+                    .tracking(2)
 
                 StepGridView(engine: engine)
                     .padding(.bottom, 16)
             }
         }
-        .background(Color(.systemBackground))
+        .background(TR808.bg)
+        .preferredColorScheme(.dark)
         .sheet(item: $selectedPadIndex) { index in
             PadDetailSheet(
                 engine: engine,
@@ -102,35 +114,35 @@ struct SequencerView: View {
         return Button {
             selectedPadIndex = index
         } label: {
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: 10)
                 .fill(padFill(color: color, hasAudio: hasAudio, isPlaying: isPlaying, isRecordingThis: isRecordingThis))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: 10)
                         .strokeBorder(
-                            color.opacity(hasAudio ? 0.6 : 0.2),
-                            lineWidth: isPlaying ? 3 : 1.5
+                            color.opacity(hasAudio ? 0.5 : 0.15),
+                            lineWidth: isPlaying ? 2.5 : 1
                         )
                 )
                 .overlay {
-                    VStack(spacing: 6) {
+                    VStack(spacing: 4) {
                         if isRecordingThis {
                             Image(systemName: "waveform")
-                                .font(.title2)
-                                .foregroundStyle(.red)
+                                .font(.system(size: 18))
+                                .foregroundStyle(TR808.ledOn)
                                 .symbolEffect(.variableColor.iterative)
                         } else if hasAudio {
                             Image(systemName: "waveform")
-                                .font(.title3)
+                                .font(.system(size: 16))
                                 .foregroundStyle(color)
                         } else {
-                            Image(systemName: "plus.circle")
-                                .font(.title3)
-                                .foregroundStyle(color.opacity(0.5))
+                            Image(systemName: "plus")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(TR808.silverDim)
                         }
 
                         Text(engine.padLabels[index])
-                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                            .foregroundStyle(hasAudio ? color : color.opacity(0.4))
+                            .font(TR808.label(8))
+                            .foregroundStyle(hasAudio ? color : TR808.silverDim)
                             .lineLimit(1)
                     }
                 }
@@ -141,13 +153,13 @@ struct SequencerView: View {
 
     private func padFill(color: Color, hasAudio: Bool, isPlaying: Bool, isRecordingThis: Bool) -> some ShapeStyle {
         if isRecordingThis {
-            return AnyShapeStyle(Color.red.opacity(0.15))
+            return AnyShapeStyle(TR808.ledOn.opacity(0.15))
         } else if isPlaying {
-            return AnyShapeStyle(color.opacity(0.25))
+            return AnyShapeStyle(color.opacity(0.2))
         } else if hasAudio {
-            return AnyShapeStyle(color.opacity(0.1))
+            return AnyShapeStyle(color.opacity(0.08))
         } else {
-            return AnyShapeStyle(Color(.systemGray6))
+            return AnyShapeStyle(TR808.surface)
         }
     }
 
@@ -157,23 +169,23 @@ struct SequencerView: View {
         } label: {
             HStack(spacing: 8) {
                 Circle()
-                    .fill(.red)
+                    .fill(TR808.ledOn)
                     .frame(width: 10, height: 10)
 
                 Text("RECORDING TO PAD \(padIndex + 1)")
-                    .font(.system(size: 13, weight: .bold, design: .monospaced))
-                    .foregroundStyle(.red)
+                    .font(TR808.label(12, weight: .bold))
+                    .foregroundStyle(TR808.ledOn)
 
-                Text("— TAP TO STOP")
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.secondary)
+                Text("TAP TO STOP")
+                    .font(TR808.label(10))
+                    .foregroundStyle(TR808.silverDim)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 10)
             .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.red.opacity(0.1))
-                    .strokeBorder(Color.red.opacity(0.3), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(TR808.ledOn.opacity(0.1))
+                    .strokeBorder(TR808.ledOn.opacity(0.3), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -196,7 +208,6 @@ struct PadDetailSheet: View {
         NavigationStack {
             VStack(spacing: 20) {
                 if hasAudio {
-                    // Waveform with start/end markers
                     WaveformView(
                         waveform: engine.padWaveforms[padIndex],
                         startPoint: Binding(
@@ -207,27 +218,27 @@ struct PadDetailSheet: View {
                             get: { engine.padEndPoints[padIndex] },
                             set: { engine.padEndPoints[padIndex] = $0 }
                         ),
-                        color: color
+                        color: color,
+                        onTrimChanged: { engine.rebuildTrimmedBuffer(for: padIndex) }
                     )
                     .frame(height: 150)
                     .padding(.horizontal)
 
                     Text(engine.padLabels[padIndex])
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .font(TR808.label(12, weight: .bold))
                         .foregroundStyle(color)
 
-                    // Loaded pad actions
                     VStack(spacing: 12) {
                         Button {
                             engine.triggerPad(padIndex)
                         } label: {
                             Label("Play Sample", systemImage: "play.fill")
-                                .font(.system(size: 15, weight: .semibold, design: .monospaced))
+                                .font(TR808.label(14, weight: .semibold))
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
                                 .background(color.opacity(0.15))
                                 .foregroundStyle(color)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
                         }
 
                         HStack(spacing: 12) {
@@ -235,44 +246,43 @@ struct PadDetailSheet: View {
                                 onImport()
                             } label: {
                                 Label("Replace", systemImage: "arrow.triangle.2.circlepath")
-                                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                                    .font(TR808.label(12))
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 12)
-                                    .background(Color(.systemGray5))
-                                    .foregroundStyle(.primary)
-                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                                    .background(TR808.surfaceLight)
+                                    .foregroundStyle(TR808.silver)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
                             }
 
                             Button(role: .destructive) {
                                 engine.clearPad(padIndex)
                             } label: {
                                 Label("Clear", systemImage: "trash")
-                                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                                    .font(TR808.label(12))
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 12)
-                                    .background(Color.red.opacity(0.1))
-                                    .foregroundStyle(.red)
-                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                                    .background(TR808.stepRed.opacity(0.1))
+                                    .foregroundStyle(TR808.stepRed)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
                             }
                         }
                     }
                     .padding(.horizontal)
                 } else {
-                    // Empty state
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(color.opacity(0.05))
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(TR808.surface)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 20)
-                                .strokeBorder(color.opacity(0.3), lineWidth: 1.5)
+                            RoundedRectangle(cornerRadius: 16)
+                                .strokeBorder(TR808.surfaceLight, lineWidth: 1)
                         )
                         .overlay {
                             VStack(spacing: 10) {
                                 Image(systemName: "waveform.slash")
-                                    .font(.system(size: 40))
-                                    .foregroundStyle(.secondary.opacity(0.4))
+                                    .font(.system(size: 36))
+                                    .foregroundStyle(TR808.silverDim.opacity(0.4))
                                 Text("EMPTY")
-                                    .font(.system(size: 13, weight: .bold, design: .monospaced))
-                                    .foregroundStyle(.secondary)
+                                    .font(TR808.label(12, weight: .bold))
+                                    .foregroundStyle(TR808.silverDim)
                             }
                         }
                         .frame(height: 150)
@@ -283,24 +293,24 @@ struct PadDetailSheet: View {
                             onImport()
                         } label: {
                             Label("Import Sample", systemImage: "square.and.arrow.down")
-                                .font(.system(size: 15, weight: .semibold, design: .monospaced))
+                                .font(TR808.label(14, weight: .semibold))
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
-                                .background(color.opacity(0.15))
-                                .foregroundStyle(color)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .background(TR808.accent.opacity(0.15))
+                                .foregroundStyle(TR808.accent)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
                         }
 
                         Button {
                             onRecord()
                         } label: {
                             Label("Record Sample", systemImage: "mic.circle.fill")
-                                .font(.system(size: 15, weight: .semibold, design: .monospaced))
+                                .font(TR808.label(14, weight: .semibold))
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
-                                .background(Color(.systemGray5))
-                                .foregroundStyle(.primary)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .background(TR808.surfaceLight)
+                                .foregroundStyle(TR808.silver)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
                         }
                     }
                     .padding(.horizontal)
@@ -309,104 +319,179 @@ struct PadDetailSheet: View {
                 Spacer()
             }
             .padding(.top, 8)
+            .background(TR808.bg)
             .navigationTitle("PAD \(padIndex + 1)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { onDismiss() }
-                        .font(.system(.body, design: .monospaced, weight: .semibold))
+                        .font(TR808.label(15, weight: .semibold))
+                        .foregroundStyle(TR808.accent)
                 }
             }
+            .toolbarBackground(TR808.surface, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
         }
+        .preferredColorScheme(.dark)
     }
 }
 
-// MARK: - Waveform View with Start/End Markers
+// MARK: - Waveform View with Zoom + Start/End Markers
 
 struct WaveformView: View {
     let waveform: [Float]
     @Binding var startPoint: Float
     @Binding var endPoint: Float
     let color: Color
+    var onTrimChanged: (() -> Void)? = nil
 
     @State private var draggingStart = false
     @State private var draggingEnd = false
+    @State private var zoom: CGFloat = 1.0
+    @State private var pinchBase: CGFloat = 1.0
 
     private let handleWidth: CGFloat = 14
+    private let minZoom: CGFloat = 1.0
+    private let maxZoom: CGFloat = 32.0
 
     var body: some View {
-        GeometryReader { geo in
-            let w = geo.size.width
-            let h = geo.size.height
-            let startX = CGFloat(startPoint) * w
-            let endX = CGFloat(endPoint) * w
+        VStack(spacing: 8) {
+            // Scrollable + zoomable waveform
+            GeometryReader { outer in
+                let containerWidth = outer.size.width
+                let contentWidth = containerWidth * zoom
+                let height = outer.size.height
 
-            ZStack(alignment: .leading) {
-                // Background
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(.systemGray6))
-
-                // Dimmed regions outside start/end
-                HStack(spacing: 0) {
-                    Rectangle()
-                        .fill(Color.black.opacity(0.4))
-                        .frame(width: max(0, startX))
-                    Spacer(minLength: 0)
-                    Rectangle()
-                        .fill(Color.black.opacity(0.4))
-                        .frame(width: max(0, w - endX))
+                ScrollView(.horizontal, showsIndicators: true) {
+                    waveformContent(contentWidth: contentWidth, height: height)
+                        .frame(width: contentWidth, height: height)
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-
-                // Waveform bars
-                if !waveform.isEmpty {
-                    HStack(alignment: .center, spacing: 1) {
-                        ForEach(0..<waveform.count, id: \.self) { i in
-                            let normalized = CGFloat(i) / CGFloat(waveform.count)
-                            let isInRange = normalized >= CGFloat(startPoint) && normalized <= CGFloat(endPoint)
-                            let barHeight = max(2, CGFloat(waveform[i]) * h * 0.8)
-                            RoundedRectangle(cornerRadius: 1)
-                                .fill(isInRange ? color : color.opacity(0.2))
-                                .frame(height: barHeight)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .gesture(
+                    MagnifyGesture()
+                        .onChanged { value in
+                            let newZoom = pinchBase * value.magnification
+                            zoom = min(maxZoom, max(minZoom, newZoom))
                         }
-                    }
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 8)
-                }
-
-                // Start handle
-                handleView(position: startX, label: "S", isActive: draggingStart)
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { drag in
-                                draggingStart = true
-                                let newVal = Float(drag.location.x / w)
-                                startPoint = max(0, min(newVal, endPoint - 0.02))
-                            }
-                            .onEnded { _ in draggingStart = false }
-                    )
-
-                // End handle
-                handleView(position: endX, label: "E", isActive: draggingEnd)
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { drag in
-                                draggingEnd = true
-                                let newVal = Float(drag.location.x / w)
-                                endPoint = min(1, max(newVal, startPoint + 0.02))
-                            }
-                            .onEnded { _ in draggingEnd = false }
-                    )
+                        .onEnded { _ in
+                            pinchBase = zoom
+                        }
+                )
             }
+
+            // Zoom control bar
+            HStack(spacing: 10) {
+                Image(systemName: "minus.magnifyingglass")
+                    .font(.system(size: 12))
+                    .foregroundStyle(TR808.silverDim)
+
+                Slider(value: $zoom, in: minZoom...maxZoom)
+                    .tint(TR808.accent)
+                    .onChange(of: zoom) { _, newVal in
+                        pinchBase = newVal
+                    }
+
+                Image(systemName: "plus.magnifyingglass")
+                    .font(.system(size: 12))
+                    .foregroundStyle(TR808.silverDim)
+
+                Text("\(String(format: "%.1f", zoom))x")
+                    .font(TR808.readout(10))
+                    .foregroundStyle(TR808.silver)
+                    .frame(width: 36)
+
+                if zoom > 1.0 {
+                    Button {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            zoom = 1.0
+                            pinchBase = 1.0
+                        }
+                    } label: {
+                        Image(systemName: "arrow.counterclockwise")
+                            .font(.system(size: 11))
+                            .foregroundStyle(TR808.accent)
+                    }
+                }
+            }
+            .frame(height: 20)
         }
     }
 
-    private func handleView(position: CGFloat, label: String, isActive: Bool) -> some View {
+    private func waveformContent(contentWidth: CGFloat, height: CGFloat) -> some View {
+        let startX = CGFloat(startPoint) * contentWidth
+        let endX = CGFloat(endPoint) * contentWidth
+
+        return ZStack(alignment: .leading) {
+            // Background
+            Rectangle()
+                .fill(TR808.surfaceDim)
+
+            // Dimmed regions outside trim
+            HStack(spacing: 0) {
+                Rectangle()
+                    .fill(Color.black.opacity(0.5))
+                    .frame(width: max(0, startX))
+                Spacer(minLength: 0)
+                Rectangle()
+                    .fill(Color.black.opacity(0.5))
+                    .frame(width: max(0, contentWidth - endX))
+            }
+
+            // Waveform bars
+            if !waveform.isEmpty {
+                HStack(alignment: .center, spacing: zoom > 3 ? 2 : 1) {
+                    ForEach(0..<waveform.count, id: \.self) { i in
+                        let normalized = CGFloat(i) / CGFloat(waveform.count)
+                        let isInRange = normalized >= CGFloat(startPoint) && normalized <= CGFloat(endPoint)
+                        let barHeight = max(2, CGFloat(waveform[i]) * height * 0.8)
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(isInRange ? color : color.opacity(0.15))
+                            .frame(height: barHeight)
+                    }
+                }
+                .padding(.horizontal, 4)
+                .padding(.vertical, 8)
+            }
+
+            // Start handle
+            handleView(label: "S", isActive: draggingStart)
+                .offset(x: startX - handleWidth / 2)
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { drag in
+                            draggingStart = true
+                            let newVal = Float(drag.location.x / contentWidth)
+                            startPoint = max(0, min(newVal, endPoint - 0.001))
+                        }
+                        .onEnded { _ in
+                                draggingStart = false
+                                onTrimChanged?()
+                            }
+                )
+
+            // End handle
+            handleView(label: "E", isActive: draggingEnd)
+                .offset(x: endX - handleWidth / 2)
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { drag in
+                            draggingEnd = true
+                            let newVal = Float(drag.location.x / contentWidth)
+                            endPoint = min(1, max(newVal, startPoint + 0.001))
+                        }
+                        .onEnded { _ in
+                            draggingEnd = false
+                            onTrimChanged?()
+                        }
+                )
+        }
+    }
+
+    private func handleView(label: String, isActive: Bool) -> some View {
         VStack(spacing: 0) {
-            // Top tab
             Text(label)
-                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                .foregroundStyle(.white)
+                .font(TR808.readout(8, weight: .bold))
+                .foregroundStyle(TR808.bg)
                 .frame(width: handleWidth, height: 16)
                 .background(
                     UnevenRoundedRectangle(
@@ -415,15 +500,13 @@ struct WaveformView: View {
                         bottomTrailingRadius: 0,
                         topTrailingRadius: 4
                     )
-                    .fill(isActive ? color : color.opacity(0.8))
+                    .fill(isActive ? TR808.accent : TR808.cream)
                 )
 
-            // Vertical line
             Rectangle()
-                .fill(isActive ? color : color.opacity(0.8))
+                .fill(isActive ? TR808.accent : TR808.cream)
                 .frame(width: 2)
         }
-        .offset(x: position - handleWidth / 2)
     }
 }
 
@@ -433,4 +516,5 @@ extension Int: @retroactive Identifiable {
 
 #Preview {
     SequencerView(engine: AudioEngine())
+        .preferredColorScheme(.dark)
 }

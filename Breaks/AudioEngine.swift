@@ -41,9 +41,12 @@ class AudioEngine {
     private var engine = AVAudioEngine()
     private var players: [AVAudioPlayerNode] = []
     private var padBuffers: [AVAudioPCMBuffer?] = []
+    private var trimmedBuffers: [AVAudioPCMBuffer?] = []
     private var eqNode: AVAudioUnitEQ?
     private var distortion: AVAudioUnitDistortion?
     private var submixer: AVAudioMixerNode?
+    private var engineSampleRate: Double = 44100
+    private var playerFormat: AVAudioFormat!
 
     // Recording
     private var recordingFile: AVAudioFile?
@@ -54,8 +57,8 @@ class AudioEngine {
     private var sequencerTimer: DispatchSourceTimer?
     private let sequencerQueue = DispatchQueue(label: "com.breaks.sequencer", qos: .userInteractive)
 
-    // Pad colors
-    let padColors: [Color] = [.orange, .cyan, .yellow, .pink, .purple, .green, .red, .mint]
+    // Pad colors (TR-808)
+    let padColors: [Color] = TR808.padColors
 
     init() {
         padLabels = (1...8).map { "PAD \($0)" }
@@ -66,6 +69,7 @@ class AudioEngine {
         padEndPoints = Array(repeating: 1, count: 8)
         pattern = Array(repeating: Array(repeating: false, count: 16), count: 8)
         padBuffers = Array(repeating: nil, count: 8)
+        trimmedBuffers = Array(repeating: nil, count: 8)
         setupAudio()
         setupInterruptionHandling()
     }
@@ -102,8 +106,10 @@ class AudioEngine {
 
         let mainMixer = engine.mainMixerNode
         let format = mainMixer.outputFormat(forBus: 0)
-        let stereoFormat = AVAudioFormat(standardFormatWithSampleRate: format.sampleRate, channels: 2)!
-        let monoFormat = AVAudioFormat(standardFormatWithSampleRate: format.sampleRate, channels: 1)!
+        engineSampleRate = format.sampleRate > 0 ? format.sampleRate : 44100
+        let stereoFormat = AVAudioFormat(standardFormatWithSampleRate: engineSampleRate, channels: 2)!
+        let monoFormat = AVAudioFormat(standardFormatWithSampleRate: engineSampleRate, channels: 1)!
+        playerFormat = monoFormat
 
         // Submixer for all pads
         let sub = AVAudioMixerNode()
@@ -161,40 +167,69 @@ class AudioEngine {
 
     // MARK: - Pad Playback
 
-    func triggerPad(_ index: Int) {
-        guard index < padCount, let fullBuffer = padBuffers[index] else { return }
-        ensureEngineRunning()
-        let player = players[index]
-        if player.isPlaying {
-            player.stop()
+    func rebuildTrimmedBuffer(for index: Int) {
+        guard index < padCount, let fullBuffer = padBuffers[index] else {
+            trimmedBuffers[index] = nil
+            return
         }
-
-        // Calculate trimmed region from start/end points
         let totalFrames = Int(fullBuffer.frameLength)
         let startFrame = Int(Float(totalFrames) * padStartPoints[index])
         let endFrame = Int(Float(totalFrames) * padEndPoints[index])
         let trimmedLength = max(1, endFrame - startFrame)
 
-        guard let trimmedBuffer = AVAudioPCMBuffer(
-            pcmFormat: fullBuffer.format,
+        // Always use the player's connection format for the trimmed buffer
+        guard let buffer = AVAudioPCMBuffer(
+            pcmFormat: playerFormat,
             frameCapacity: AVAudioFrameCount(trimmedLength)
         ) else { return }
-        trimmedBuffer.frameLength = AVAudioFrameCount(trimmedLength)
+        buffer.frameLength = AVAudioFrameCount(trimmedLength)
 
         let srcData = fullBuffer.floatChannelData![0]
-        let dstData = trimmedBuffer.floatChannelData![0]
+        let dstData = buffer.floatChannelData![0]
         for i in 0..<trimmedLength {
             let srcIdx = startFrame + i
             dstData[i] = srcIdx < totalFrames ? srcData[srcIdx] : 0
         }
 
+        // Apply short fade in/out to prevent clicks (~64 samples ≈ 1.5ms at 44.1kHz)
+        let fadeSamples = min(16, trimmedLength / 2)
+        for i in 0..<fadeSamples {
+            let gain = Float(i) / Float(fadeSamples)
+            dstData[i] *= gain
+            dstData[trimmedLength - 1 - i] *= gain
+        }
+
+        trimmedBuffers[index] = buffer
+    }
+
+    private func rebuildAllTrimmedBuffers() {
+        for i in 0..<padCount where padBuffers[i] != nil {
+            rebuildTrimmedBuffer(for: i)
+        }
+    }
+
+    func triggerPad(_ index: Int) {
+        guard index < padCount else { return }
+        if trimmedBuffers[index] == nil {
+            rebuildTrimmedBuffer(for: index)
+        }
+        guard let buffer = trimmedBuffers[index] else { return }
+        ensureEngineRunning()
+        let player = players[index]
         padIsPlaying[index] = true
-        player.scheduleBuffer(trimmedBuffer, at: nil, options: []) { [weak self] in
+        // .interrupts seamlessly replaces the current buffer with no gap.
+        // Only call play() if the player is stopped — on an already-playing
+        // node, .interrupts starts the new buffer immediately and play() is
+        // not needed.
+        let needsPlay = !player.isPlaying
+        player.scheduleBuffer(buffer, at: nil, options: .interrupts) { [weak self] in
             DispatchQueue.main.async {
                 self?.padIsPlaying[index] = false
             }
         }
-        player.play()
+        if needsPlay {
+            player.play()
+        }
     }
 
     // MARK: - Recording
@@ -291,6 +326,9 @@ class AudioEngine {
                 print("Engine restart error: \(error)")
             }
 
+            // Rebuild all existing trimmed buffers after engine restart
+            self.rebuildAllTrimmedBuffers()
+
             if let url {
                 DispatchQueue.main.async {
                     self.loadAudioFile(url: url, intoPad: padIndex)
@@ -306,40 +344,52 @@ class AudioEngine {
 
         do {
             let file = try AVAudioFile(forReading: url)
-            let processingFormat = AVAudioFormat(standardFormatWithSampleRate: file.processingFormat.sampleRate, channels: 1)!
             let frameCount = AVAudioFrameCount(file.length)
             guard let fileBuffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: frameCount) else { return }
             try file.read(into: fileBuffer)
 
-            // Convert to mono if needed
-            let buffer: AVAudioPCMBuffer
+            // Target format: mono float at the engine's sample rate
+            let engineRate = engineSampleRate
+
+            // Convert to mono standard float at file's sample rate first
+            let fileMonoFormat = AVAudioFormat(standardFormatWithSampleRate: file.processingFormat.sampleRate, channels: 1)!
+            let monoBuffer: AVAudioPCMBuffer
+
             if file.processingFormat.channelCount > 1 {
-                guard let monoBuffer = AVAudioPCMBuffer(pcmFormat: processingFormat, frameCapacity: frameCount) else { return }
-                monoBuffer.frameLength = fileBuffer.frameLength
-                let monoData = monoBuffer.floatChannelData![0]
+                guard let mb = AVAudioPCMBuffer(pcmFormat: fileMonoFormat, frameCapacity: frameCount) else { return }
+                mb.frameLength = fileBuffer.frameLength
+                let monoData = mb.floatChannelData![0]
                 let leftData = fileBuffer.floatChannelData![0]
                 let rightData = fileBuffer.floatChannelData![1]
                 for i in 0..<Int(fileBuffer.frameLength) {
                     monoData[i] = (leftData[i] + rightData[i]) * 0.5
                 }
-                buffer = monoBuffer
+                monoBuffer = mb
+            } else if file.processingFormat != fileMonoFormat {
+                // Convert to standard float if needed (e.g. Int16 files)
+                guard let mb = AVAudioPCMBuffer(pcmFormat: fileMonoFormat, frameCapacity: frameCount) else { return }
+                guard let converter = AVAudioConverter(from: file.processingFormat, to: fileMonoFormat) else { return }
+                mb.frameLength = frameCount
+                try converter.convert(to: mb, from: fileBuffer)
+                monoBuffer = mb
             } else {
-                buffer = fileBuffer
+                monoBuffer = fileBuffer
             }
 
-            // Resample if needed to match engine sample rate
-            let engineRate = engine.mainMixerNode.outputFormat(forBus: 0).sampleRate
+            // Resample to engine rate if needed
             if file.processingFormat.sampleRate != engineRate {
-                if let resampled = resample(buffer: buffer, from: file.processingFormat.sampleRate, to: engineRate) {
+                if let resampled = resample(buffer: monoBuffer, from: file.processingFormat.sampleRate, to: engineRate) {
                     padBuffers[padIndex] = resampled
                 } else {
-                    padBuffers[padIndex] = buffer
+                    padBuffers[padIndex] = monoBuffer
                 }
             } else {
-                padBuffers[padIndex] = buffer
+                padBuffers[padIndex] = monoBuffer
             }
 
             let waveform = self.generateWaveform(from: self.padBuffers[padIndex]!)
+
+            self.rebuildTrimmedBuffer(for: padIndex)
 
             DispatchQueue.main.async {
                 self.padHasAudio[padIndex] = true
@@ -402,6 +452,7 @@ class AudioEngine {
     func clearPad(_ index: Int) {
         guard index < padCount else { return }
         padBuffers[index] = nil
+        trimmedBuffers[index] = nil
         padHasAudio[index] = false
         padWaveforms[index] = []
         padStartPoints[index] = 0
@@ -472,6 +523,14 @@ class AudioEngine {
     func toggleStep(pad: Int, step: Int) {
         guard pad < padCount, step < stepCount else { return }
         pattern[pad][step].toggle()
+    }
+
+    func clearPattern() {
+        for pad in 0..<padCount {
+            for step in 0..<stepCount {
+                pattern[pad][step] = false
+            }
+        }
     }
 
     // MARK: - EQ Controls

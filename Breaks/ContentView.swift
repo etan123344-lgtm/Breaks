@@ -24,10 +24,11 @@ struct ContentView: View {
                 MixerView(engine: engine)
             }
         }
-        .tint(.orange)
+        .tint(TR808.accent)
     }
 }
 
 #Preview {
     ContentView()
+        .preferredColorScheme(.dark)
 }

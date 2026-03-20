@@ -12,20 +12,20 @@ struct StepGridView: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            // Transport bar
             transportBar
 
-            // Step grid
             ScrollView(.horizontal, showsIndicators: false) {
                 VStack(spacing: 4) {
-                    // Step numbers
+                    // Step numbers with 808 color groups
                     HStack(spacing: 3) {
                         Color.clear
                             .frame(width: 44, height: 1)
                         ForEach(0..<engine.stepCount, id: \.self) { step in
                             Text("\(step + 1)")
-                                .font(.system(size: 8, weight: .medium, design: .monospaced))
-                                .foregroundStyle(step % 4 == 0 ? .primary : .secondary)
+                                .font(TR808.readout(8))
+                                .foregroundStyle(
+                                    step % 4 == 0 ? TR808.stepColor(for: step) : TR808.silverDim
+                                )
                                 .frame(width: 28)
                         }
                     }
@@ -33,14 +33,12 @@ struct StepGridView: View {
                     // Pad rows
                     ForEach(0..<engine.padCount, id: \.self) { pad in
                         HStack(spacing: 3) {
-                            // Pad label
                             Text(shortLabel(pad))
-                                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                .foregroundStyle(engine.padHasAudio[pad] ? engine.padColors[pad] : .secondary)
+                                .font(TR808.label(9, weight: .bold))
+                                .foregroundStyle(engine.padHasAudio[pad] ? engine.padColors[pad] : TR808.silverDim)
                                 .frame(width: 44, alignment: .leading)
                                 .lineLimit(1)
 
-                            // Step cells
                             ForEach(0..<engine.stepCount, id: \.self) { step in
                                 stepCell(pad: pad, step: step)
                             }
@@ -49,6 +47,16 @@ struct StepGridView: View {
                 }
                 .padding(.horizontal, 16)
             }
+
+            // Reset button
+            Button {
+                engine.clearPattern()
+            } label: {
+                Label("Reset", systemImage: "arrow.counterclockwise")
+                    .font(TR808.label(12))
+            }
+            .buttonStyle(.bordered)
+            .tint(TR808.silverDim)
         }
     }
 
@@ -60,17 +68,18 @@ struct StepGridView: View {
             } label: {
                 Image(systemName: engine.sequencerPlaying ? "stop.fill" : "play.fill")
                     .font(.title3)
-                    .foregroundStyle(engine.sequencerPlaying ? .red : .green)
+                    .foregroundStyle(engine.sequencerPlaying ? TR808.ledOn : TR808.accent)
                     .frame(width: 36, height: 36)
             }
 
-            // BPM
+            // BPM readout
             VStack(spacing: 1) {
                 Text("BPM")
-                    .font(.system(size: 9, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.secondary)
+                    .font(TR808.label(9))
+                    .foregroundStyle(TR808.silverDim)
                 Text("\(Int(engine.bpm))")
-                    .font(.system(size: 18, weight: .bold, design: .monospaced))
+                    .font(TR808.readout(18))
+                    .foregroundStyle(TR808.cream)
             }
             .frame(width: 44)
 
@@ -78,14 +87,14 @@ struct StepGridView: View {
                 get: { engine.bpm },
                 set: { engine.updateBPM($0) }
             ), in: 60...200, step: 1)
-            .tint(.orange)
+            .tint(TR808.accent)
 
-            // Beat indicator
-            HStack(spacing: 2) {
+            // LED beat indicator
+            HStack(spacing: 3) {
                 ForEach(0..<4, id: \.self) { beat in
                     Circle()
                         .fill(engine.sequencerPlaying && engine.sequencerCurrentStep / 4 == beat
-                              ? Color.orange : Color.gray.opacity(0.3))
+                              ? TR808.ledOn : TR808.ledOff)
                         .frame(width: 8, height: 8)
                 }
             }
@@ -97,19 +106,19 @@ struct StepGridView: View {
         let isActive = engine.pattern[pad][step]
         let isCurrent = engine.sequencerPlaying && engine.sequencerCurrentStep == step
         let hasAudio = engine.padHasAudio[pad]
-        let color = engine.padColors[pad]
+        let stepColor = TR808.stepColor(for: step)
         let isDownbeat = step % 4 == 0
 
         return Button {
             engine.toggleStep(pad: pad, step: step)
         } label: {
             RoundedRectangle(cornerRadius: 4)
-                .fill(cellColor(isActive: isActive, isCurrent: isCurrent, hasAudio: hasAudio, color: color))
+                .fill(cellColor(isActive: isActive, isCurrent: isCurrent, hasAudio: hasAudio, stepColor: stepColor))
                 .overlay(
                     RoundedRectangle(cornerRadius: 4)
                         .strokeBorder(
-                            isCurrent ? Color.white.opacity(0.7) :
-                                (isDownbeat ? Color.white.opacity(0.1) : Color.clear),
+                            isCurrent ? TR808.cream.opacity(0.6) :
+                                (isDownbeat ? TR808.surfaceLight : Color.clear),
                             lineWidth: isCurrent ? 1.5 : 0.5
                         )
                 )
@@ -118,13 +127,13 @@ struct StepGridView: View {
         .buttonStyle(.plain)
     }
 
-    private func cellColor(isActive: Bool, isCurrent: Bool, hasAudio: Bool, color: Color) -> Color {
+    private func cellColor(isActive: Bool, isCurrent: Bool, hasAudio: Bool, stepColor: Color) -> Color {
         if isActive && hasAudio {
-            return color.opacity(isCurrent ? 1.0 : 0.75)
+            return stepColor.opacity(isCurrent ? 1.0 : 0.75)
         } else if isActive {
-            return color.opacity(isCurrent ? 0.5 : 0.3)
+            return stepColor.opacity(isCurrent ? 0.4 : 0.25)
         } else {
-            return Color(.systemGray5).opacity(isCurrent ? 0.5 : 0.25)
+            return TR808.surface.opacity(isCurrent ? 0.8 : 1.0)
         }
     }
 
@@ -139,4 +148,6 @@ struct StepGridView: View {
 
 #Preview {
     StepGridView(engine: AudioEngine())
+        .background(TR808.bg)
+        .preferredColorScheme(.dark)
 }
