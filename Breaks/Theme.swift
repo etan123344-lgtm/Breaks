@@ -30,7 +30,7 @@ enum TR808 {
     static let stepWhite = Color(red: 0.85, green: 0.84, blue: 0.82)
 
     static func stepColor(for step: Int) -> Color {
-        switch step {
+        switch step % 16 {
         case 0..<4:   return stepRed
         case 4..<8:   return stepOrange
         case 8..<12:  return stepYellow

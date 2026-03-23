@@ -9,10 +9,32 @@ import SwiftUI
 
 struct StepGridView: View {
     @Bindable var engine: AudioEngine
+    @State private var showShareSheet = false
+    @State private var exportURL: URL?
+    @State private var showExportNaming = false
+    @State private var exportName = ""
 
     var body: some View {
         VStack(spacing: 12) {
             transportBar
+
+            // Bar position indicator (only shown for multi-bar patterns)
+            if engine.barCount > 1 {
+                HStack(spacing: 6) {
+                    ForEach(0..<engine.barCount, id: \.self) { bar in
+                        let isCurrent = engine.sequencerPlaying && engine.sequencerCurrentStep / 16 == bar
+                        Text("Bar \(bar + 1)")
+                            .font(TR808.label(10, weight: isCurrent ? .bold : .medium))
+                            .foregroundStyle(isCurrent ? TR808.accent : TR808.silverDim)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(isCurrent ? TR808.accent.opacity(0.15) : Color.clear)
+                            )
+                    }
+                }
+            }
 
             ScrollView(.horizontal, showsIndicators: false) {
                 VStack(spacing: 4) {
@@ -21,7 +43,10 @@ struct StepGridView: View {
                         Color.clear
                             .frame(width: 44, height: 1)
                         ForEach(0..<engine.stepCount, id: \.self) { step in
-                            Text("\(step + 1)")
+                            if step > 0 && step % 16 == 0 {
+                                Color.clear.frame(width: 4, height: 1)
+                            }
+                            Text("\(step % 16 + 1)")
                                 .font(TR808.readout(8))
                                 .foregroundStyle(
                                     step % 4 == 0 ? TR808.stepColor(for: step) : TR808.silverDim
@@ -40,6 +65,9 @@ struct StepGridView: View {
                                 .lineLimit(1)
 
                             ForEach(0..<engine.stepCount, id: \.self) { step in
+                                if step > 0 && step % 16 == 0 {
+                                    Color.clear.frame(width: 4, height: 28)
+                                }
                                 stepCell(pad: pad, step: step)
                             }
                         }
@@ -48,15 +76,50 @@ struct StepGridView: View {
                 .padding(.horizontal, 16)
             }
 
-            // Reset button
-            Button {
-                engine.clearPattern()
-            } label: {
-                Label("Reset", systemImage: "arrow.counterclockwise")
-                    .font(TR808.label(12))
+            // Reset & Export buttons
+            HStack(spacing: 12) {
+                Button {
+                    engine.clearPattern()
+                } label: {
+                    Label("Reset", systemImage: "arrow.counterclockwise")
+                        .font(TR808.label(12))
+                }
+                .buttonStyle(.bordered)
+                .tint(TR808.silverDim)
+
+                Button {
+                    exportName = ""
+                    showExportNaming = true
+                } label: {
+                    Label(engine.isExporting ? "Exporting…" : "Export WAV",
+                          systemImage: engine.isExporting ? "hourglass" : "square.and.arrow.up")
+                        .font(TR808.label(12))
+                }
+                .buttonStyle(.bordered)
+                .tint(TR808.accent)
+                .disabled(engine.isExporting)
             }
-            .buttonStyle(.bordered)
-            .tint(TR808.silverDim)
+        }
+        .alert("Export WAV", isPresented: $showExportNaming) {
+            TextField("File name", text: $exportName)
+            Button("Cancel", role: .cancel) { }
+            Button("Export") {
+                let name = exportName.trimmingCharacters(in: .whitespacesAndNewlines)
+                let filename = name.isEmpty ? nil : name
+                engine.exportPattern(filename: filename) { url in
+                    if let url {
+                        exportURL = url
+                        showShareSheet = true
+                    }
+                }
+            }
+        } message: {
+            Text("Choose a name for your exported file.")
+        }
+        .sheet(isPresented: $showShareSheet) {
+            if let exportURL {
+                ShareSheetView(items: [exportURL])
+            }
         }
     }
 
@@ -89,14 +152,33 @@ struct StepGridView: View {
             ), in: 60...200, step: 1)
             .tint(TR808.accent)
 
-            // LED beat indicator
+            // LED beat indicator (current beat within current bar)
             HStack(spacing: 3) {
                 ForEach(0..<4, id: \.self) { beat in
                     Circle()
-                        .fill(engine.sequencerPlaying && engine.sequencerCurrentStep / 4 == beat
+                        .fill(engine.sequencerPlaying && (engine.sequencerCurrentStep % 16) / 4 == beat
                               ? TR808.ledOn : TR808.ledOff)
                         .frame(width: 8, height: 8)
                 }
+            }
+
+            // Bar count selector
+            Menu {
+                ForEach(1...4, id: \.self) { count in
+                    Button("\(count) \(count == 1 ? "Bar" : "Bars")") {
+                        engine.setBarCount(count)
+                    }
+                }
+            } label: {
+                VStack(spacing: 1) {
+                    Text("BARS")
+                        .font(TR808.label(9))
+                        .foregroundStyle(TR808.silverDim)
+                    Text("\(engine.barCount)")
+                        .font(TR808.readout(18))
+                        .foregroundStyle(TR808.cream)
+                }
+                .frame(width: 44)
             }
         }
         .padding(.horizontal, 16)
@@ -144,6 +226,16 @@ struct StepGridView: View {
         }
         return String(label.prefix(5))
     }
+}
+
+struct ShareSheetView: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 #Preview {

@@ -270,8 +270,9 @@ class AudioEngine {
     var recordingPadIndex: Int? = nil
 
     // MARK: - Sequencer State
-    let stepCount = 16
-    var pattern: [[Bool]]             // pattern[pad][step], 8×16
+    var barCount: Int = 1             // 1–4 bars
+    var stepCount: Int { barCount * 16 }
+    var pattern: [[Bool]]             // pattern[pad][step], 8×N
     var bpm: Double = 120.0
     var sequencerPlaying = false
     var sequencerCurrentStep = 0
@@ -850,6 +851,27 @@ class AudioEngine {
         }
     }
 
+    func setBarCount(_ newCount: Int) {
+        let clamped = max(1, min(4, newCount))
+        let newStepCount = clamped * 16
+        let oldStepCount = pattern.isEmpty ? 0 : pattern[0].count
+
+        if newStepCount == oldStepCount { return }
+
+        for pad in 0..<padCount {
+            if newStepCount > oldStepCount {
+                pattern[pad].append(contentsOf: Array(repeating: false, count: newStepCount - oldStepCount))
+            } else {
+                pattern[pad] = Array(pattern[pad].prefix(newStepCount))
+            }
+        }
+        barCount = clamped
+
+        if sequencerCurrentStep >= newStepCount {
+            sequencerCurrentStep = 0
+        }
+    }
+
     // MARK: - Bundled Sounds
 
     struct BundledSound: Identifiable, Hashable {
@@ -887,5 +909,245 @@ class AudioEngine {
     func updateTapeMix(_ value: Float) {
         tapeMix = value
         tapeAU?.mix = value
+    }
+
+    // MARK: - Export
+
+    var isExporting = false
+    var exportedFileURL: URL?
+
+    func exportPattern(filename: String? = nil, completion: @escaping (URL?) -> Void) {
+        guard !isExporting else { completion(nil); return }
+        isExporting = true
+
+        // Snapshot current state for the background thread
+        let bpm = self.bpm
+        let stepCount = self.stepCount
+        let padCount = self.padCount
+        let pattern = self.pattern
+        let eqGains = self.eqGains
+        let eqFrequencies = self.eqFrequencies
+        let tapeMix = self.tapeMix
+        let sampleRate = self.engineSampleRate
+
+        // Snapshot per-pad state and buffers (nil = pad has no audio)
+        var padSnapshots: [(buffer: AVAudioPCMBuffer, volume: Float, rate: Double)?] = []
+        for i in 0..<padCount {
+            guard padHasAudio[i], i < voices.count, voices[i].hasBuffer,
+                  let fullBuffer = padBuffers[i] else {
+                padSnapshots.append(nil)
+                continue
+            }
+            let totalFrames = Int(fullBuffer.frameLength)
+            let startFrame = Int(Float(totalFrames) * padStartPoints[i])
+            let endFrame = Int(Float(totalFrames) * padEndPoints[i])
+            let trimmedLength = max(1, endFrame - startFrame)
+
+            let fmt = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)!
+            guard let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: AVAudioFrameCount(trimmedLength)) else {
+                padSnapshots.append(nil)
+                continue
+            }
+            buf.frameLength = AVAudioFrameCount(trimmedLength)
+            let srcData = fullBuffer.floatChannelData![0]
+            let dstData = buf.floatChannelData![0]
+            for j in 0..<trimmedLength {
+                let srcIdx = startFrame + j
+                dstData[j] = srcIdx < totalFrames ? srcData[srcIdx] : 0
+            }
+            let fadeSamples = min(16, trimmedLength / 2)
+            for j in 0..<fadeSamples {
+                let gain = Float(j) / Float(fadeSamples)
+                dstData[j] *= gain
+                dstData[trimmedLength - 1 - j] *= gain
+            }
+
+            padSnapshots.append((buf, padVolumes[i], pow(2.0, Double(padPitchSemitones[i]) / 12.0)))
+        }
+
+        let exportFilename = filename
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let url = self?.performOfflineRender(
+                bpm: bpm,
+                stepCount: stepCount,
+                padCount: padCount,
+                pattern: pattern,
+                padSnapshots: padSnapshots,
+                eqGains: eqGains,
+                eqFrequencies: eqFrequencies,
+                tapeMix: tapeMix,
+                sampleRate: sampleRate,
+                filename: exportFilename
+            )
+            DispatchQueue.main.async {
+                self?.isExporting = false
+                self?.exportedFileURL = url
+                completion(url)
+            }
+        }
+    }
+
+    private func performOfflineRender(
+        bpm: Double,
+        stepCount: Int,
+        padCount: Int,
+        pattern: [[Bool]],
+        padSnapshots: [(buffer: AVAudioPCMBuffer, volume: Float, rate: Double)?],
+        eqGains: [Float],
+        eqFrequencies: [Float],
+        tapeMix: Float,
+        sampleRate: Double,
+        filename: String? = nil
+    ) -> URL? {
+        let maxFrames: AVAudioFrameCount = 4096
+        let monoFormat = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)!
+        let stereoFormat = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 2)!
+
+        // Build offline engine — must enable manual rendering BEFORE connecting nodes
+        let offlineEngine = AVAudioEngine()
+        do {
+            try offlineEngine.enableManualRenderingMode(.offline, format: stereoFormat, maximumFrameCount: maxFrames)
+        } catch {
+            print("Offline engine setup error: \(error)")
+            return nil
+        }
+
+        // Create voices and source nodes for offline rendering
+        var offlineVoices: [PadVoice] = []
+        let sub = AVAudioMixerNode()
+        offlineEngine.attach(sub)
+
+        for i in 0..<padCount {
+            let voice = PadVoice()
+            if let snap = padSnapshots[i] {
+                voice.loadBuffer(snap.buffer)
+                voice.volume = snap.volume
+                voice.rate = snap.rate
+            }
+            offlineVoices.append(voice)
+
+            let sourceNode = AVAudioSourceNode(format: monoFormat) { [voice] _, _, frameCount, audioBufferList -> OSStatus in
+                let ablPointer = UnsafeMutableAudioBufferListPointer(audioBufferList)
+                let output = ablPointer[0].mData!.assumingMemoryBound(to: Float.self)
+                voice.render(into: output, frameCount: Int(frameCount))
+                return noErr
+            }
+            offlineEngine.attach(sourceNode)
+            offlineEngine.connect(sourceNode, to: sub, format: monoFormat)
+        }
+
+        // EQ
+        let eq = AVAudioUnitEQ(numberOfBands: eqFrequencies.count)
+        for (i, freq) in eqFrequencies.enumerated() {
+            let band = eq.bands[i]
+            band.filterType = .parametric
+            band.frequency = freq
+            band.bandwidth = 1.0
+            band.gain = eqGains[i]
+            band.bypass = false
+        }
+        offlineEngine.attach(eq)
+
+        // Tape effect
+        let tapeNode = AVAudioUnitEffect(audioComponentDescription: TapeEffectAU.desc)
+        offlineEngine.attach(tapeNode)
+        (tapeNode.auAudioUnit as? TapeEffectAU)?.mix = tapeMix
+
+        // Signal chain: sub -> EQ -> tape -> mainMixer
+        let mainMixer = offlineEngine.mainMixerNode
+        offlineEngine.connect(sub, to: eq, format: stereoFormat)
+        offlineEngine.connect(eq, to: tapeNode, format: stereoFormat)
+        offlineEngine.connect(tapeNode, to: mainMixer, format: stereoFormat)
+
+        do {
+            try offlineEngine.start()
+        } catch {
+            print("Offline engine start error: \(error)")
+            return nil
+        }
+
+        // Calculate total frames to render
+        let stepInterval = 60.0 / bpm / 4.0
+        let framesPerStep = Int(stepInterval * sampleRate)
+        let longestPadDuration = padSnapshots.compactMap { snap -> Double? in
+            guard let snap else { return nil }
+            guard snap.buffer.frameLength > 0 else { return nil }
+            return Double(snap.buffer.frameLength) / sampleRate / snap.rate
+        }.max() ?? 0
+        let tailFrames = Int(longestPadDuration * sampleRate)
+        let totalFrames = framesPerStep * stepCount + tailFrames
+
+        // Output file
+        let safeName = filename ?? "Breaks_Export_\(Int(Date().timeIntervalSince1970))"
+        let wavFilename = safeName.hasSuffix(".wav") ? safeName : "\(safeName).wav"
+        let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent(wavFilename)
+        guard let outputFile = try? AVAudioFile(
+            forWriting: outputURL,
+            settings: [
+                AVFormatIDKey: kAudioFormatLinearPCM,
+                AVSampleRateKey: sampleRate,
+                AVNumberOfChannelsKey: 2,
+                AVLinearPCMBitDepthKey: 16,
+                AVLinearPCMIsFloatKey: false,
+                AVLinearPCMIsBigEndianKey: false
+            ]
+        ) else {
+            print("Could not create output file")
+            return nil
+        }
+
+        // Render loop — process step-by-step for accurate timing
+        guard let renderBuffer = AVAudioPCMBuffer(pcmFormat: stereoFormat, frameCapacity: maxFrames) else {
+            return nil
+        }
+
+        // Helper to render an exact number of frames (in chunks of maxFrames)
+        func renderFrames(_ count: Int) -> Bool {
+            var remaining = count
+            while remaining > 0 {
+                let chunk = min(AVAudioFrameCount(remaining), maxFrames)
+                do {
+                    let status = try offlineEngine.renderOffline(chunk, to: renderBuffer)
+                    switch status {
+                    case .success:
+                        try outputFile.write(from: renderBuffer)
+                    case .error:
+                        return false
+                    default:
+                        break
+                    }
+                } catch {
+                    print("Render error: \(error)")
+                    return false
+                }
+                remaining -= Int(chunk)
+            }
+            return true
+        }
+
+        // Render each step: trigger pads, then render exactly framesPerStep
+        for step in 0..<stepCount {
+            for pad in 0..<padCount {
+                if pattern[pad][step], let snap = padSnapshots[pad], snap.buffer.frameLength > 0 {
+                    offlineVoices[pad].trigger()
+                }
+            }
+            if !renderFrames(framesPerStep) {
+                offlineEngine.stop()
+                return nil
+            }
+        }
+
+        // Render tail so last triggered samples ring out
+        if tailFrames > 0 {
+            if !renderFrames(tailFrames) {
+                offlineEngine.stop()
+                return nil
+            }
+        }
+
+        offlineEngine.stop()
+        return outputURL
     }
 }
