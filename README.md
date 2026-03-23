@@ -1,1 +1,5 @@
-16 step sampler sequencer based on the Roland TR-808. Allows user to upload samples or record through the iPhone mic into 8 sample pads. User can set start and endpoints to the sample and then sequence them. User can then use the built in equalizer and mixer (compression and saturation) to process the sequenced samples.
+Sample sequencer inspired by the Roland TR-808 drum machine.
+
+8 customizable sample pads. Users can upload samples, record with their iPhone microphone, or use the original Roland TR-808 drum sounds. Sample pads allow for user set start and end points. Users can pitch or reverse these samples. Once samples are loaded into the pads, the user can sequence these samples in a 16-step step sequencer.
+
+The sequenced audio is run through a 7-band graphic equalizer and then into an effects mixer.
