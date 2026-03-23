@@ -25,21 +25,12 @@ struct MixerView: View {
                 .foregroundStyle(TR808.silver)
                 .tracking(2)
 
-            HStack(spacing: 60) {
-                mixerChannel(
-                    label: "COMP",
-                    value: engine.compressionMix,
-                    color: TR808.stepOrange,
-                    onChange: { engine.updateCompressionMix($0) }
-                )
-
-                mixerChannel(
-                    label: "SAT",
-                    value: engine.saturationMix,
-                    color: TR808.stepRed,
-                    onChange: { engine.updateSaturationMix($0) }
-                )
-            }
+            mixerChannel(
+                label: "TAPE",
+                value: engine.tapeMix,
+                color: TR808.stepOrange,
+                onChange: { engine.updateTapeMix($0) }
+            )
             .padding(.top, 20)
 
             Spacer()

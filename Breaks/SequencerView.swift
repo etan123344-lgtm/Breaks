@@ -201,6 +201,8 @@ struct PadDetailSheet: View {
     let onRecord: () -> Void
     let onDismiss: () -> Void
 
+    @State private var showSoundBrowser = false
+
     var color: Color { engine.padColors[padIndex] }
     var hasAudio: Bool { engine.padHasAudio[padIndex] }
 
@@ -219,6 +221,7 @@ struct PadDetailSheet: View {
                             set: { engine.padEndPoints[padIndex] = $0 }
                         ),
                         color: color,
+                        duration: engine.padDurations[padIndex],
                         onTrimChanged: { engine.rebuildTrimmedBuffer(for: padIndex) }
                     )
                     .frame(height: 150)
@@ -227,6 +230,70 @@ struct PadDetailSheet: View {
                     Text(engine.padLabels[padIndex])
                         .font(TR808.label(12, weight: .bold))
                         .foregroundStyle(color)
+
+                    // Volume control
+                    HStack(spacing: 10) {
+                        Image(systemName: "speaker.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(TR808.silverDim)
+                        Slider(
+                            value: Binding(
+                                get: { engine.padVolumes[padIndex] },
+                                set: { engine.updatePadVolume(padIndex, volume: $0) }
+                            ),
+                            in: 0...1
+                        )
+                        .tint(color)
+                        Image(systemName: "speaker.wave.3.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(TR808.silverDim)
+                        Text("\(Int(engine.padVolumes[padIndex] * 100))%")
+                            .font(TR808.readout(11))
+                            .foregroundStyle(TR808.silver)
+                            .frame(width: 38, alignment: .trailing)
+                    }
+                    .padding(.horizontal)
+
+                    // Pitch control
+                    HStack(spacing: 10) {
+                        Image(systemName: "arrow.down.right")
+                            .font(.system(size: 11))
+                            .foregroundStyle(TR808.silverDim)
+                        Slider(
+                            value: Binding(
+                                get: { engine.padPitchSemitones[padIndex] },
+                                set: { engine.updatePadPitch(padIndex, semitones: $0) }
+                            ),
+                            in: -12...12,
+                            step: 1
+                        )
+                        .tint(color)
+                        Image(systemName: "arrow.up.right")
+                            .font(.system(size: 11))
+                            .foregroundStyle(TR808.silverDim)
+                        Text("\(Int(engine.padPitchSemitones[padIndex]))st")
+                            .font(TR808.readout(11))
+                            .foregroundStyle(TR808.silver)
+                            .frame(width: 38, alignment: .trailing)
+                    }
+                    .padding(.horizontal)
+
+                    // Reverse toggle
+                    Button {
+                        engine.reversePad(padIndex)
+                    } label: {
+                        Label(
+                            engine.padReversed[padIndex] ? "Reversed" : "Reverse",
+                            systemImage: "arrow.left.arrow.right"
+                        )
+                        .font(TR808.label(12, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(engine.padReversed[padIndex] ? color.opacity(0.25) : TR808.surfaceLight)
+                        .foregroundStyle(engine.padReversed[padIndex] ? color : TR808.silver)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                    }
+                    .padding(.horizontal)
 
                     VStack(spacing: 12) {
                         Button {
@@ -242,6 +309,18 @@ struct PadDetailSheet: View {
                         }
 
                         HStack(spacing: 12) {
+                            Button {
+                                showSoundBrowser = true
+                            } label: {
+                                Label("808 Kit", systemImage: "square.grid.2x2")
+                                    .font(TR808.label(12))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 12)
+                                    .background(TR808.accent.opacity(0.15))
+                                    .foregroundStyle(TR808.accent)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                            }
+
                             Button {
                                 onImport()
                             } label: {
@@ -290,14 +369,26 @@ struct PadDetailSheet: View {
 
                     VStack(spacing: 12) {
                         Button {
+                            showSoundBrowser = true
+                        } label: {
+                            Label("TR-808 Kit", systemImage: "square.grid.2x2")
+                                .font(TR808.label(14, weight: .semibold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(TR808.accent.opacity(0.15))
+                                .foregroundStyle(TR808.accent)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+
+                        Button {
                             onImport()
                         } label: {
                             Label("Import Sample", systemImage: "square.and.arrow.down")
                                 .font(TR808.label(14, weight: .semibold))
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
-                                .background(TR808.accent.opacity(0.15))
-                                .foregroundStyle(TR808.accent)
+                                .background(TR808.surfaceLight)
+                                .foregroundStyle(TR808.silver)
                                 .clipShape(RoundedRectangle(cornerRadius: 10))
                         }
 
@@ -331,6 +422,57 @@ struct PadDetailSheet: View {
             }
             .toolbarBackground(TR808.surface, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
+            .sheet(isPresented: $showSoundBrowser) {
+                SoundBrowserSheet(engine: engine, padIndex: padIndex)
+            }
+        }
+        .preferredColorScheme(.dark)
+    }
+}
+
+// MARK: - Sound Browser Sheet
+
+struct SoundBrowserSheet: View {
+    @Bindable var engine: AudioEngine
+    let padIndex: Int
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List(AudioEngine.bundledSounds) { sound in
+                Button {
+                    engine.loadBundledSound(sound, intoPad: padIndex)
+                    dismiss()
+                } label: {
+                    HStack {
+                        Image(systemName: "waveform")
+                            .foregroundStyle(TR808.accent)
+                            .frame(width: 24)
+                        Text(sound.name)
+                            .font(TR808.label(14))
+                            .foregroundStyle(TR808.cream)
+                        Spacer()
+                        Image(systemName: "plus.circle")
+                            .foregroundStyle(TR808.silverDim)
+                    }
+                    .padding(.vertical, 4)
+                }
+                .listRowBackground(TR808.surface)
+            }
+            .listStyle(.plain)
+            .background(TR808.bg)
+            .scrollContentBackground(.hidden)
+            .navigationTitle("TR-808 KIT")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Cancel") { dismiss() }
+                        .font(TR808.label(15, weight: .semibold))
+                        .foregroundStyle(TR808.accent)
+                }
+            }
+            .toolbarBackground(TR808.surface, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
         }
         .preferredColorScheme(.dark)
     }
@@ -343,12 +485,12 @@ struct WaveformView: View {
     @Binding var startPoint: Float
     @Binding var endPoint: Float
     let color: Color
+    var duration: Double = 0
     var onTrimChanged: (() -> Void)? = nil
 
     @State private var draggingStart = false
     @State private var draggingEnd = false
     @State private var zoom: CGFloat = 1.0
-    @State private var pinchBase: CGFloat = 1.0
 
     private let handleWidth: CGFloat = 14
     private let minZoom: CGFloat = 1.0
@@ -367,16 +509,20 @@ struct WaveformView: View {
                         .frame(width: contentWidth, height: height)
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 10))
-                .gesture(
-                    MagnifyGesture()
-                        .onChanged { value in
-                            let newZoom = pinchBase * value.magnification
-                            zoom = min(maxZoom, max(minZoom, newZoom))
-                        }
-                        .onEnded { _ in
-                            pinchBase = zoom
-                        }
-                )
+            }
+
+            // Timestamps
+            if duration > 0 {
+                HStack {
+                    Text(formatTimestamp(Double(startPoint) * duration))
+                        .font(TR808.readout(10))
+                        .foregroundStyle(TR808.silver)
+                    Spacer()
+                    Text(formatTimestamp(Double(endPoint) * duration))
+                        .font(TR808.readout(10))
+                        .foregroundStyle(TR808.silver)
+                }
+                .padding(.horizontal, 4)
             }
 
             // Zoom control bar
@@ -387,9 +533,6 @@ struct WaveformView: View {
 
                 Slider(value: $zoom, in: minZoom...maxZoom)
                     .tint(TR808.accent)
-                    .onChange(of: zoom) { _, newVal in
-                        pinchBase = newVal
-                    }
 
                 Image(systemName: "plus.magnifyingglass")
                     .font(.system(size: 12))
@@ -404,7 +547,6 @@ struct WaveformView: View {
                     Button {
                         withAnimation(.easeOut(duration: 0.2)) {
                             zoom = 1.0
-                            pinchBase = 1.0
                         }
                     } label: {
                         Image(systemName: "arrow.counterclockwise")
@@ -485,6 +627,12 @@ struct WaveformView: View {
                         }
                 )
         }
+    }
+
+    private func formatTimestamp(_ seconds: Double) -> String {
+        let mins = Int(seconds) / 60
+        let secs = seconds - Double(mins * 60)
+        return String(format: "%d:%05.2f", mins, secs)
     }
 
     private func handleView(label: String, isActive: Bool) -> some View {

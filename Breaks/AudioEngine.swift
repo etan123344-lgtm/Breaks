@@ -6,7 +6,251 @@
 //
 
 import AVFoundation
+import AudioToolbox
 import SwiftUI
+
+// MARK: - TapeEffect (custom AU for wow/flutter/warble)
+
+/// Processes audio through a modulated delay line to emulate cassette tape artifacts:
+/// slow pitch drift (wow), fast pitch wobble (flutter), random warble, and treble roll-off.
+final class TapeEffectAU: AUAudioUnit {
+    private var inputBus: AUAudioUnitBus!
+    private var outputBus: AUAudioUnitBus!
+    private var _inputBusses: AUAudioUnitBusArray!
+    private var _outputBusses: AUAudioUnitBusArray!
+
+    // Delay lines (per-channel circular buffers)
+    private let maxChannels = 2
+    private var delayBuffers: [[Float]] = []
+    private var writeIndices: [Int] = []
+    private let delayBufferSize = 8192
+
+    // LFO phases
+    private var wowPhase: Double = 0
+    private var flutterPhase: Double = 0
+    // One-pole low-pass for treble roll-off (per-channel)
+    private var lpfState: [Float] = [0, 0]
+
+    // Noise state (UInt32 for LCG)
+    private var noiseSeed: UInt32 = 12345
+
+    /// Mix amount 0–1, set from main thread
+    var mix: Float = 0.0
+
+    private var sampleRate: Double = 44100
+
+    override init(componentDescription: AudioComponentDescription, options: AudioComponentInstantiationOptions = []) throws {
+        try super.init(componentDescription: componentDescription, options: options)
+        let format = AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 2)!
+        inputBus = try AUAudioUnitBus(format: format)
+        outputBus = try AUAudioUnitBus(format: format)
+        _inputBusses = AUAudioUnitBusArray(audioUnit: self, busType: .input, busses: [inputBus])
+        _outputBusses = AUAudioUnitBusArray(audioUnit: self, busType: .output, busses: [outputBus])
+        delayBuffers = (0..<maxChannels).map { _ in Array(repeating: 0, count: delayBufferSize) }
+        writeIndices = Array(repeating: 0, count: maxChannels)
+    }
+
+    override var inputBusses: AUAudioUnitBusArray { _inputBusses }
+    override var outputBusses: AUAudioUnitBusArray { _outputBusses }
+
+    override func allocateRenderResources() throws {
+        try super.allocateRenderResources()
+        sampleRate = inputBus.format.sampleRate
+        delayBuffers = (0..<maxChannels).map { _ in Array(repeating: 0, count: delayBufferSize) }
+        writeIndices = Array(repeating: 0, count: maxChannels)
+        wowPhase = 0
+        flutterPhase = 0
+        noiseSeed = 12345
+        lpfState = [0, 0]
+    }
+
+    override var internalRenderBlock: AUInternalRenderBlock {
+        // Capture state for the render thread
+        let delaySize = delayBufferSize
+
+        return { [unowned self] actionFlags, timestamp, frameCount, outputBusNumber, outputData, renderEvent, pullInputBlock in
+
+            guard let pullInputBlock = pullInputBlock else {
+                return kAudioUnitErr_NoConnection
+            }
+
+            // Pull input audio
+            var pullFlags: AudioUnitRenderActionFlags = []
+            let status = pullInputBlock(&pullFlags, timestamp, frameCount, 0, outputData)
+            guard status == noErr else { return status }
+
+            let mix = self.mix
+            guard mix > 0.001 else { return noErr } // Bypass when fully dry
+
+            let frames = Int(frameCount)
+            let sr = self.sampleRate
+
+            // LFO rates
+            let wowRate = 1.2 / sr       // ~1.2 Hz
+            let flutterRate = 7.5 / sr    // ~7.5 Hz
+
+            // Modulation depths in samples
+            let wowDepth = 80.0 * Double(mix)
+            let flutterDepth = 16.0 * Double(mix)
+            let noiseDepth: Float = 2.0 * mix
+
+            // Low-pass coefficient: more mix = more treble loss
+            let lpfCoeff: Float = 1.0 - (0.4 * mix)  // 1.0 = no filter, 0.6 = noticeable roll-off
+
+            let bufferListPtr = UnsafeMutableAudioBufferListPointer(outputData)
+
+            let channelCount = min(bufferListPtr.count, self.maxChannels)
+
+            for i in 0..<frames {
+                // Advance LFOs once per sample (shared across channels)
+                let wow = sin(self.wowPhase * .pi * 2) * wowDepth
+                let flutter = sin(self.flutterPhase * .pi * 2) * flutterDepth
+
+                self.wowPhase += wowRate
+                if self.wowPhase >= 1.0 { self.wowPhase -= 1.0 }
+                self.flutterPhase += flutterRate
+                if self.flutterPhase >= 1.0 { self.flutterPhase -= 1.0 }
+
+                // Noise once per sample
+                self.noiseSeed = self.noiseSeed &* 1103515245 &+ 12345
+                let noiseSample = Float(Int32(bitPattern: self.noiseSeed >> 1)) / Float(Int32.max)
+                let noise = noiseSample * noiseDepth
+
+                let totalDelay = 200.0 + wow + flutter + Double(noise)
+
+                for ch in 0..<channelCount {
+                    guard let data = bufferListPtr[ch].mData?.assumingMemoryBound(to: Float.self) else { continue }
+                    let dry = data[i]
+
+                    // Write into this channel's delay buffer
+                    self.delayBuffers[ch][self.writeIndices[ch]] = dry
+
+                    // Read from modulated position
+                    let readPos = Double(self.writeIndices[ch]) - totalDelay
+                    let readPosWrapped = ((readPos.truncatingRemainder(dividingBy: Double(delaySize))) + Double(delaySize))
+                        .truncatingRemainder(dividingBy: Double(delaySize))
+
+                    let low = Int(readPosWrapped)
+                    let high = (low + 1) % delaySize
+                    let frac = Float(readPosWrapped - Double(low))
+                    let wet = self.delayBuffers[ch][low] * (1 - frac) + self.delayBuffers[ch][high] * frac
+
+                    // One-pole low-pass (treble roll-off)
+                    self.lpfState[ch] = lpfCoeff * wet + (1 - lpfCoeff) * self.lpfState[ch]
+
+                    // Mix dry/wet
+                    data[i] = dry * (1 - mix) + self.lpfState[ch] * mix
+
+                    self.writeIndices[ch] = (self.writeIndices[ch] + 1) % delaySize
+                }
+            }
+
+            return noErr
+        }
+    }
+
+    /// Register this AU so it can be instantiated by component description.
+    static let desc = AudioComponentDescription(
+        componentType: kAudioUnitType_Effect,
+        componentSubType: fourCC("tape"),
+        componentManufacturer: fourCC("Brks"),
+        componentFlags: 0,
+        componentFlagsMask: 0
+    )
+
+    private static func fourCC(_ string: String) -> FourCharCode {
+        var result: FourCharCode = 0
+        for char in string.utf8.prefix(4) {
+            result = (result << 8) | FourCharCode(char)
+        }
+        return result
+    }
+
+    static func register() {
+        AUAudioUnit.registerSubclass(
+            TapeEffectAU.self,
+            as: desc,
+            name: "Breaks: Tape",
+            version: 1
+        )
+    }
+}
+
+// MARK: - PadVoice (lock-free, render-thread safe)
+
+/// Holds per-pad audio state that the render thread reads directly.
+/// Triggering a pad just resets the read position — zero latency.
+final class PadVoice: @unchecked Sendable {
+    /// Retained reference so the buffer memory stays alive while rendering.
+    private var _buffer: AVAudioPCMBuffer?
+    private var samples: UnsafePointer<Float>?
+    private var sampleCount: Int = 0
+
+    /// Current read position — written by trigger(), read by render().
+    private(set) var readPosition: Double = 0
+    private(set) var active: Bool = false
+
+    /// Per-pad volume (0.0–1.0). Written from main thread, read from render thread.
+    var volume: Float = 1.0
+
+    /// Playback rate for varispeed pitch. 1.0 = normal, 2.0 = octave up, 0.5 = octave down.
+    var rate: Double = 1.0
+
+    var hasBuffer: Bool { _buffer != nil }
+
+    var duration: Double {
+        guard sampleCount > 0 else { return 0 }
+        return Double(sampleCount) / (_buffer?.format.sampleRate ?? 44100)
+    }
+
+    func loadBuffer(_ buffer: AVAudioPCMBuffer?) {
+        active = false
+        _buffer = buffer
+        samples = buffer.flatMap { UnsafePointer($0.floatChannelData?[0]) }
+        sampleCount = buffer.map { Int($0.frameLength) } ?? 0
+        readPosition = 0.0
+    }
+
+    func trigger() {
+        readPosition = 0.0
+        active = true
+    }
+
+    func stop() {
+        active = false
+    }
+
+    /// Called on the real-time audio render thread.
+    func render(into output: UnsafeMutablePointer<Float>, frameCount: Int) {
+        guard active, let samples = samples else {
+            output.update(repeating: 0, count: frameCount)
+            return
+        }
+
+        let gain = volume
+        let playbackRate = rate
+        let maxPos = Double(sampleCount - 1)
+
+        for i in 0..<frameCount {
+            if readPosition >= maxPos {
+                // Zero-fill remainder and stop
+                output.advanced(by: i).update(repeating: 0, count: frameCount - i)
+                active = false
+                return
+            }
+
+            // Linear interpolation between adjacent samples
+            let low = Int(readPosition)
+            let high = min(low + 1, sampleCount - 1)
+            let frac = Float(readPosition - Double(low))
+            output[i] = (samples[low] * (1 - frac) + samples[high] * frac) * gain
+
+            readPosition += playbackRate
+        }
+    }
+}
+
+// MARK: - AudioEngine
 
 @Observable
 class AudioEngine {
@@ -18,6 +262,10 @@ class AudioEngine {
     var padWaveforms: [[Float]]       // downsampled amplitude data for display
     var padStartPoints: [Float]       // normalized 0–1
     var padEndPoints: [Float]         // normalized 0–1
+    var padVolumes: [Float]           // 0.0–1.0
+    var padPitchSemitones: [Float]    // -12 to +12
+    var padDurations: [Double]            // total duration in seconds
+    var padReversed: [Bool]               // whether pad audio is reversed
     var isRecording = false
     var recordingPadIndex: Int? = nil
 
@@ -34,16 +282,16 @@ class AudioEngine {
     var eqGains: [Float] = [0, 0, 0, 0, 0, 0, 0] // -12 to +12 dB
 
     // MARK: - Mixer State
-    var compressionMix: Float = 0.0
-    var saturationMix: Float = 0.0
+    var tapeMix: Float = 0.0
 
     // MARK: - Audio Engine
     private var engine = AVAudioEngine()
-    private var players: [AVAudioPlayerNode] = []
-    private var padBuffers: [AVAudioPCMBuffer?] = []
-    private var trimmedBuffers: [AVAudioPCMBuffer?] = []
+    private var voices: [PadVoice] = []
+    private var sourceNodes: [AVAudioSourceNode] = []
+    private var padBuffers: [AVAudioPCMBuffer?] = []       // full (untrimmed) buffers for waveform/trim editing
     private var eqNode: AVAudioUnitEQ?
-    private var distortion: AVAudioUnitDistortion?
+    private var tapeEffect: AVAudioUnit?
+    private var tapeAU: TapeEffectAU?
     private var submixer: AVAudioMixerNode?
     private var engineSampleRate: Double = 44100
     private var playerFormat: AVAudioFormat!
@@ -53,9 +301,11 @@ class AudioEngine {
     private var recordingURL: URL?
     private var inputTap = false
 
-    // Sequencer timer
-    private var sequencerTimer: DispatchSourceTimer?
+    // Sequencer timing
     private let sequencerQueue = DispatchQueue(label: "com.breaks.sequencer", qos: .userInteractive)
+    private var sequencerOrigin: DispatchTime = .now()
+    private var sequencerStepIndex: Int = 0
+    private var sequencerGeneration: Int = 0
 
     // Pad colors (TR-808)
     let padColors: [Color] = TR808.padColors
@@ -67,9 +317,12 @@ class AudioEngine {
         padWaveforms = Array(repeating: [], count: 8)
         padStartPoints = Array(repeating: 0, count: 8)
         padEndPoints = Array(repeating: 1, count: 8)
+        padVolumes = Array(repeating: 1.0, count: 8)
+        padPitchSemitones = Array(repeating: 0, count: 8)
+        padDurations = Array(repeating: 0, count: 8)
+        padReversed = Array(repeating: false, count: 8)
         pattern = Array(repeating: Array(repeating: false, count: 16), count: 8)
         padBuffers = Array(repeating: nil, count: 8)
-        trimmedBuffers = Array(repeating: nil, count: 8)
         setupAudio()
         setupInterruptionHandling()
     }
@@ -116,12 +369,20 @@ class AudioEngine {
         engine.attach(sub)
         submixer = sub
 
-        // Create 8 player nodes
+        // Create 8 source nodes with render callbacks (replaces AVAudioPlayerNode)
         for _ in 0..<padCount {
-            let player = AVAudioPlayerNode()
-            engine.attach(player)
-            players.append(player)
-            engine.connect(player, to: sub, format: monoFormat)
+            let voice = PadVoice()
+            voices.append(voice)
+
+            let sourceNode = AVAudioSourceNode(format: monoFormat) { [voice] _, _, frameCount, audioBufferList -> OSStatus in
+                let ablPointer = UnsafeMutableAudioBufferListPointer(audioBufferList)
+                let output = ablPointer[0].mData!.assumingMemoryBound(to: Float.self)
+                voice.render(into: output, frameCount: Int(frameCount))
+                return noErr
+            }
+            sourceNodes.append(sourceNode)
+            engine.attach(sourceNode)
+            engine.connect(sourceNode, to: sub, format: monoFormat)
         }
 
         // EQ
@@ -137,17 +398,17 @@ class AudioEngine {
         eqNode = eq
         engine.attach(eq)
 
-        // Distortion for saturation
-        let dist = AVAudioUnitDistortion()
-        dist.loadFactoryPreset(.drumsBitBrush)
-        dist.wetDryMix = 0
-        distortion = dist
-        engine.attach(dist)
+        // Tape effect
+        TapeEffectAU.register()
+        let tapeNode = AVAudioUnitEffect(audioComponentDescription: TapeEffectAU.desc)
+        tapeEffect = tapeNode
+        tapeAU = tapeNode.auAudioUnit as? TapeEffectAU
+        engine.attach(tapeNode)
 
-        // Signal chain: submixer -> EQ -> distortion -> mainMixer
+        // Signal chain: submixer -> EQ -> tape -> mainMixer
         engine.connect(sub, to: eq, format: stereoFormat)
-        engine.connect(eq, to: dist, format: stereoFormat)
-        engine.connect(dist, to: mainMixer, format: stereoFormat)
+        engine.connect(eq, to: tapeNode, format: stereoFormat)
+        engine.connect(tapeNode, to: mainMixer, format: stereoFormat)
 
         do {
             try engine.start()
@@ -169,7 +430,7 @@ class AudioEngine {
 
     func rebuildTrimmedBuffer(for index: Int) {
         guard index < padCount, let fullBuffer = padBuffers[index] else {
-            trimmedBuffers[index] = nil
+            voices[index].loadBuffer(nil)
             return
         }
         let totalFrames = Int(fullBuffer.frameLength)
@@ -177,7 +438,6 @@ class AudioEngine {
         let endFrame = Int(Float(totalFrames) * padEndPoints[index])
         let trimmedLength = max(1, endFrame - startFrame)
 
-        // Always use the player's connection format for the trimmed buffer
         guard let buffer = AVAudioPCMBuffer(
             pcmFormat: playerFormat,
             frameCapacity: AVAudioFrameCount(trimmedLength)
@@ -199,7 +459,7 @@ class AudioEngine {
             dstData[trimmedLength - 1 - i] *= gain
         }
 
-        trimmedBuffers[index] = buffer
+        voices[index].loadBuffer(buffer)
     }
 
     private func rebuildAllTrimmedBuffers() {
@@ -210,25 +470,25 @@ class AudioEngine {
 
     func triggerPad(_ index: Int) {
         guard index < padCount else { return }
-        if trimmedBuffers[index] == nil {
+        let voice = voices[index]
+        if !voice.hasBuffer {
             rebuildTrimmedBuffer(for: index)
         }
-        guard let buffer = trimmedBuffers[index] else { return }
+        guard voice.hasBuffer else { return }
         ensureEngineRunning()
-        let player = players[index]
+        // Just reset the read position — the render callback is already
+        // running on the audio thread, so playback starts on the very
+        // next audio buffer with zero scheduling overhead.
+        voice.trigger()
         padIsPlaying[index] = true
-        // .interrupts seamlessly replaces the current buffer with no gap.
-        // Only call play() if the player is stopped — on an already-playing
-        // node, .interrupts starts the new buffer immediately and play() is
-        // not needed.
-        let needsPlay = !player.isPlaying
-        player.scheduleBuffer(buffer, at: nil, options: .interrupts) { [weak self] in
-            DispatchQueue.main.async {
-                self?.padIsPlaying[index] = false
+
+        // Schedule UI reset when sample finishes
+        let dur = voice.duration
+        DispatchQueue.main.asyncAfter(deadline: .now() + dur) { [weak self] in
+            guard let self else { return }
+            if !self.voices[index].active {
+                self.padIsPlaying[index] = false
             }
-        }
-        if needsPlay {
-            player.play()
         }
     }
 
@@ -396,6 +656,7 @@ class AudioEngine {
                 self.padWaveforms[padIndex] = waveform
                 self.padStartPoints[padIndex] = 0
                 self.padEndPoints[padIndex] = 1
+                self.padDurations[padIndex] = self.voices[padIndex].duration
                 let filename = url.deletingPathExtension().lastPathComponent
                 if !filename.hasPrefix("pad_") {
                     self.padLabels[padIndex] = String(filename.prefix(10)).uppercased()
@@ -449,19 +710,68 @@ class AudioEngine {
         return newBuffer
     }
 
+    func updatePadVolume(_ index: Int, volume: Float) {
+        guard index < padCount else { return }
+        padVolumes[index] = volume
+        voices[index].volume = volume
+    }
+
+    func updatePadPitch(_ index: Int, semitones: Float) {
+        guard index < padCount else { return }
+        padPitchSemitones[index] = semitones
+        voices[index].rate = pow(2.0, Double(semitones) / 12.0)
+    }
+
     func clearPad(_ index: Int) {
         guard index < padCount else { return }
+        voices[index].loadBuffer(nil)
         padBuffers[index] = nil
-        trimmedBuffers[index] = nil
         padHasAudio[index] = false
         padWaveforms[index] = []
         padStartPoints[index] = 0
         padEndPoints[index] = 1
+        padDurations[index] = 0
         padLabels[index] = "PAD \(index + 1)"
-        if players[index].isPlaying {
-            players[index].stop()
-        }
+        padVolumes[index] = 1.0
+        voices[index].volume = 1.0
+        padPitchSemitones[index] = 0
+        voices[index].rate = 1.0
+        padReversed[index] = false
         padIsPlaying[index] = false
+    }
+
+    func reversePad(_ index: Int) {
+        guard index < padCount, let fullBuffer = padBuffers[index] else { return }
+        let frameCount = Int(fullBuffer.frameLength)
+        guard frameCount > 1 else { return }
+
+        DispatchQueue.global(qos: .userInitiated).async { [self] in
+            let data = fullBuffer.floatChannelData![0]
+            // Reverse sample data in-place
+            for i in 0..<frameCount / 2 {
+                let j = frameCount - 1 - i
+                let tmp = data[i]
+                data[i] = data[j]
+                data[j] = tmp
+            }
+
+            // Flip start/end points so the trim region stays on the same audio
+            let newStart = 1.0 - self.padEndPoints[index]
+            let newEnd = 1.0 - self.padStartPoints[index]
+
+            // Reverse the waveform display data (no need to regenerate)
+            let reversedWaveform = self.padWaveforms[index].reversed() as [Float]
+
+            // Rebuild trimmed buffer off main thread
+            self.rebuildTrimmedBuffer(for: index)
+
+            DispatchQueue.main.async {
+                self.padReversed[index].toggle()
+                self.padStartPoints[index] = newStart
+                self.padEndPoints[index] = newEnd
+                self.padWaveforms[index] = reversedWaveform
+            }
+        }
     }
 
     // MARK: - Sequencer Transport
@@ -479,44 +789,51 @@ class AudioEngine {
         ensureEngineRunning()
         sequencerPlaying = true
         sequencerCurrentStep = 0
-        scheduleSequencerTimer()
+        sequencerStepIndex = 0
+        sequencerGeneration += 1
+        sequencerOrigin = .now()
+        let gen = sequencerGeneration
+        sequencerQueue.async { [weak self] in
+            self?.sequencerTick(generation: gen)
+        }
     }
 
     func stopSequencer() {
         sequencerPlaying = false
-        sequencerTimer?.cancel()
-        sequencerTimer = nil
+        sequencerGeneration += 1
         sequencerCurrentStep = 0
     }
 
-    private func scheduleSequencerTimer() {
-        sequencerTimer?.cancel()
-        let interval = 60.0 / bpm / 4.0 // 16th note interval
-        let timer = DispatchSource.makeTimerSource(queue: sequencerQueue)
-        timer.schedule(deadline: .now(), repeating: interval)
-        timer.setEventHandler { [weak self] in
-            self?.sequencerTick()
-        }
-        sequencerTimer = timer
-        timer.resume()
-    }
+    private func sequencerTick(generation: Int) {
+        guard sequencerPlaying, generation == sequencerGeneration else { return }
 
-    private func sequencerTick() {
         let step = sequencerCurrentStep
         for pad in 0..<padCount {
             if pattern[pad][step] && padHasAudio[pad] {
                 triggerPad(pad)
             }
         }
+
+        let nextStep = (step + 1) % stepCount
         DispatchQueue.main.async {
-            self.sequencerCurrentStep = (step + 1) % self.stepCount
+            self.sequencerCurrentStep = nextStep
+        }
+
+        // Schedule the next tick at an absolute deadline to prevent drift.
+        sequencerStepIndex += 1
+        let stepInterval = 60.0 / bpm / 4.0
+        let nextDeadline = sequencerOrigin + stepInterval * Double(sequencerStepIndex)
+        let gen = generation
+        sequencerQueue.asyncAfter(deadline: nextDeadline) { [weak self] in
+            self?.sequencerTick(generation: gen)
         }
     }
 
     func updateBPM(_ newBPM: Double) {
         bpm = newBPM
         if sequencerPlaying {
-            scheduleSequencerTimer()
+            sequencerOrigin = .now()
+            sequencerStepIndex = 1
         }
     }
 
@@ -533,6 +850,30 @@ class AudioEngine {
         }
     }
 
+    // MARK: - Bundled Sounds
+
+    struct BundledSound: Identifiable, Hashable {
+        let id: String
+        let name: String
+        let url: URL
+    }
+
+    static var bundledSounds: [BundledSound] {
+        guard let urls = Bundle.main.urls(forResourcesWithExtension: "wav", subdirectory: nil) else {
+            return []
+        }
+        return urls
+            .map { url in
+                let name = url.deletingPathExtension().lastPathComponent
+                return BundledSound(id: name, name: name, url: url)
+            }
+            .sorted { $0.name < $1.name }
+    }
+
+    func loadBundledSound(_ sound: BundledSound, intoPad padIndex: Int) {
+        loadAudioFile(url: sound.url, intoPad: padIndex)
+    }
+
     // MARK: - EQ Controls
 
     func updateEQ(band: Int, gain: Float) {
@@ -543,12 +884,8 @@ class AudioEngine {
 
     // MARK: - Mixer Controls
 
-    func updateCompressionMix(_ value: Float) {
-        compressionMix = value
-    }
-
-    func updateSaturationMix(_ value: Float) {
-        saturationMix = value
-        distortion?.wetDryMix = value * 50
+    func updateTapeMix(_ value: Float) {
+        tapeMix = value
+        tapeAU?.mix = value
     }
 }

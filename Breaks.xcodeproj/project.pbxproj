@@ -6,8 +6,59 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		1863D0792F6E394F0043032C /* Claves.wav in Resources */ = {isa = PBXBuildFile; fileRef = 1863D0622F6E394F0043032C /* Claves.wav */; };
+		1863D07A2F6E394F0043032C /* Rimshot.wav in Resources */ = {isa = PBXBuildFile; fileRef = 1863D0702F6E394F0043032C /* Rimshot.wav */; };
+		1863D07B2F6E394F0043032C /* Conga Low.wav in Resources */ = {isa = PBXBuildFile; fileRef = 1863D0642F6E394F0043032C /* Conga Low.wav */; };
+		1863D07C2F6E394F0043032C /* Snare High.wav in Resources */ = {isa = PBXBuildFile; fileRef = 1863D0722F6E394F0043032C /* Snare High.wav */; };
+		1863D07D2F6E394F0043032C /* Clap.wav in Resources */ = {isa = PBXBuildFile; fileRef = 1863D0612F6E394F0043032C /* Clap.wav */; };
+		1863D07E2F6E394F0043032C /* Kick Mid.wav in Resources */ = {isa = PBXBuildFile; fileRef = 1863D06B2F6E394F0043032C /* Kick Mid.wav */; };
+		1863D07F2F6E394F0043032C /* Kick Long.wav in Resources */ = {isa = PBXBuildFile; fileRef = 1863D06A2F6E394F0043032C /* Kick Long.wav */; };
+		1863D0802F6E394F0043032C /* Hihat.wav in Resources */ = {isa = PBXBuildFile; fileRef = 1863D0682F6E394F0043032C /* Hihat.wav */; };
+		1863D0812F6E394F0043032C /* Open Hat Short.wav in Resources */ = {isa = PBXBuildFile; fileRef = 1863D06F2F6E394F0043032C /* Open Hat Short.wav */; };
+		1863D0822F6E394F0043032C /* Tom Low.wav in Resources */ = {isa = PBXBuildFile; fileRef = 1863D0762F6E394F0043032C /* Tom Low.wav */; };
+		1863D0832F6E394F0043032C /* Kick Short.wav in Resources */ = {isa = PBXBuildFile; fileRef = 1863D06C2F6E394F0043032C /* Kick Short.wav */; };
+		1863D0842F6E394F0043032C /* Snare Low.wav in Resources */ = {isa = PBXBuildFile; fileRef = 1863D0732F6E394F0043032C /* Snare Low.wav */; };
+		1863D0852F6E394F0043032C /* Cowbell.wav in Resources */ = {isa = PBXBuildFile; fileRef = 1863D0662F6E394F0043032C /* Cowbell.wav */; };
+		1863D0862F6E394F0043032C /* Maracas.wav in Resources */ = {isa = PBXBuildFile; fileRef = 1863D06D2F6E394F0043032C /* Maracas.wav */; };
+		1863D0872F6E394F0043032C /* Conga Mid.wav in Resources */ = {isa = PBXBuildFile; fileRef = 1863D0652F6E394F0043032C /* Conga Mid.wav */; };
+		1863D0882F6E394F0043032C /* Tom Mid.wav in Resources */ = {isa = PBXBuildFile; fileRef = 1863D0772F6E394F0043032C /* Tom Mid.wav */; };
+		1863D0892F6E394F0043032C /* Cymbal.wav in Resources */ = {isa = PBXBuildFile; fileRef = 1863D0672F6E394F0043032C /* Cymbal.wav */; };
+		1863D08A2F6E394F0043032C /* Snare Mid.wav in Resources */ = {isa = PBXBuildFile; fileRef = 1863D0742F6E394F0043032C /* Snare Mid.wav */; };
+		1863D08B2F6E394F0043032C /* 808.wav in Resources */ = {isa = PBXBuildFile; fileRef = 1863D0602F6E394F0043032C /* 808.wav */; };
+		1863D08C2F6E394F0043032C /* Kick Basic.wav in Resources */ = {isa = PBXBuildFile; fileRef = 1863D0692F6E394F0043032C /* Kick Basic.wav */; };
+		1863D08D2F6E394F0043032C /* Snare Bright.wav in Resources */ = {isa = PBXBuildFile; fileRef = 1863D0712F6E394F0043032C /* Snare Bright.wav */; };
+		1863D08E2F6E394F0043032C /* Tom High.wav in Resources */ = {isa = PBXBuildFile; fileRef = 1863D0752F6E394F0043032C /* Tom High.wav */; };
+		1863D08F2F6E394F0043032C /* Conga High.wav in Resources */ = {isa = PBXBuildFile; fileRef = 1863D0632F6E394F0043032C /* Conga High.wav */; };
+		1863D0902F6E394F0043032C /* Open Hat Long.wav in Resources */ = {isa = PBXBuildFile; fileRef = 1863D06E2F6E394F0043032C /* Open Hat Long.wav */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
-		1863CFAC2F6B9CC60043032C /* Breaks.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Breaks.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1863CFAC2F6B9CC60043032C /* Breaks.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = Breaks.app; path = "/Users/mayihavecrumbofcoochieplz/Desktop/Breaks/build/Debug-iphoneos/Breaks.app"; sourceTree = "<absolute>"; };
+		1863D0602F6E394F0043032C /* 808.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = 808.wav; sourceTree = "<group>"; };
+		1863D0612F6E394F0043032C /* Clap.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Clap.wav; sourceTree = "<group>"; };
+		1863D0622F6E394F0043032C /* Claves.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Claves.wav; sourceTree = "<group>"; };
+		1863D0632F6E394F0043032C /* Conga High.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "Conga High.wav"; sourceTree = "<group>"; };
+		1863D0642F6E394F0043032C /* Conga Low.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "Conga Low.wav"; sourceTree = "<group>"; };
+		1863D0652F6E394F0043032C /* Conga Mid.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "Conga Mid.wav"; sourceTree = "<group>"; };
+		1863D0662F6E394F0043032C /* Cowbell.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Cowbell.wav; sourceTree = "<group>"; };
+		1863D0672F6E394F0043032C /* Cymbal.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Cymbal.wav; sourceTree = "<group>"; };
+		1863D0682F6E394F0043032C /* Hihat.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Hihat.wav; sourceTree = "<group>"; };
+		1863D0692F6E394F0043032C /* Kick Basic.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "Kick Basic.wav"; sourceTree = "<group>"; };
+		1863D06A2F6E394F0043032C /* Kick Long.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "Kick Long.wav"; sourceTree = "<group>"; };
+		1863D06B2F6E394F0043032C /* Kick Mid.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "Kick Mid.wav"; sourceTree = "<group>"; };
+		1863D06C2F6E394F0043032C /* Kick Short.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "Kick Short.wav"; sourceTree = "<group>"; };
+		1863D06D2F6E394F0043032C /* Maracas.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Maracas.wav; sourceTree = "<group>"; };
+		1863D06E2F6E394F0043032C /* Open Hat Long.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "Open Hat Long.wav"; sourceTree = "<group>"; };
+		1863D06F2F6E394F0043032C /* Open Hat Short.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "Open Hat Short.wav"; sourceTree = "<group>"; };
+		1863D0702F6E394F0043032C /* Rimshot.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Rimshot.wav; sourceTree = "<group>"; };
+		1863D0712F6E394F0043032C /* Snare Bright.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "Snare Bright.wav"; sourceTree = "<group>"; };
+		1863D0722F6E394F0043032C /* Snare High.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "Snare High.wav"; sourceTree = "<group>"; };
+		1863D0732F6E394F0043032C /* Snare Low.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "Snare Low.wav"; sourceTree = "<group>"; };
+		1863D0742F6E394F0043032C /* Snare Mid.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "Snare Mid.wav"; sourceTree = "<group>"; };
+		1863D0752F6E394F0043032C /* Tom High.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "Tom High.wav"; sourceTree = "<group>"; };
+		1863D0762F6E394F0043032C /* Tom Low.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "Tom Low.wav"; sourceTree = "<group>"; };
+		1863D0772F6E394F0043032C /* Tom Mid.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "Tom Mid.wav"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -33,16 +84,39 @@
 			isa = PBXGroup;
 			children = (
 				1863CFAE2F6B9CC60043032C /* Breaks */,
-				1863CFAD2F6B9CC60043032C /* Products */,
+				1863D0782F6E394F0043032C /* TR-808 Kit */,
 			);
 			sourceTree = "<group>";
 		};
-		1863CFAD2F6B9CC60043032C /* Products */ = {
+		1863D0782F6E394F0043032C /* TR-808 Kit */ = {
 			isa = PBXGroup;
 			children = (
-				1863CFAC2F6B9CC60043032C /* Breaks.app */,
+				1863D0602F6E394F0043032C /* 808.wav */,
+				1863D0612F6E394F0043032C /* Clap.wav */,
+				1863D0622F6E394F0043032C /* Claves.wav */,
+				1863D0632F6E394F0043032C /* Conga High.wav */,
+				1863D0642F6E394F0043032C /* Conga Low.wav */,
+				1863D0652F6E394F0043032C /* Conga Mid.wav */,
+				1863D0662F6E394F0043032C /* Cowbell.wav */,
+				1863D0672F6E394F0043032C /* Cymbal.wav */,
+				1863D0682F6E394F0043032C /* Hihat.wav */,
+				1863D0692F6E394F0043032C /* Kick Basic.wav */,
+				1863D06A2F6E394F0043032C /* Kick Long.wav */,
+				1863D06B2F6E394F0043032C /* Kick Mid.wav */,
+				1863D06C2F6E394F0043032C /* Kick Short.wav */,
+				1863D06D2F6E394F0043032C /* Maracas.wav */,
+				1863D06E2F6E394F0043032C /* Open Hat Long.wav */,
+				1863D06F2F6E394F0043032C /* Open Hat Short.wav */,
+				1863D0702F6E394F0043032C /* Rimshot.wav */,
+				1863D0712F6E394F0043032C /* Snare Bright.wav */,
+				1863D0722F6E394F0043032C /* Snare High.wav */,
+				1863D0732F6E394F0043032C /* Snare Low.wav */,
+				1863D0742F6E394F0043032C /* Snare Mid.wav */,
+				1863D0752F6E394F0043032C /* Tom High.wav */,
+				1863D0762F6E394F0043032C /* Tom Low.wav */,
+				1863D0772F6E394F0043032C /* Tom Mid.wav */,
 			);
-			name = Products;
+			path = "TR-808 Kit";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -95,7 +169,7 @@
 			mainGroup = 1863CFA32F6B9CC60043032C;
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
-			productRefGroup = 1863CFAD2F6B9CC60043032C /* Products */;
+			productRefGroup = 1863CFA32F6B9CC60043032C;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -109,6 +183,30 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1863D0792F6E394F0043032C /* Claves.wav in Resources */,
+				1863D07A2F6E394F0043032C /* Rimshot.wav in Resources */,
+				1863D07B2F6E394F0043032C /* Conga Low.wav in Resources */,
+				1863D07C2F6E394F0043032C /* Snare High.wav in Resources */,
+				1863D07D2F6E394F0043032C /* Clap.wav in Resources */,
+				1863D07E2F6E394F0043032C /* Kick Mid.wav in Resources */,
+				1863D07F2F6E394F0043032C /* Kick Long.wav in Resources */,
+				1863D0802F6E394F0043032C /* Hihat.wav in Resources */,
+				1863D0812F6E394F0043032C /* Open Hat Short.wav in Resources */,
+				1863D0822F6E394F0043032C /* Tom Low.wav in Resources */,
+				1863D0832F6E394F0043032C /* Kick Short.wav in Resources */,
+				1863D0842F6E394F0043032C /* Snare Low.wav in Resources */,
+				1863D0852F6E394F0043032C /* Cowbell.wav in Resources */,
+				1863D0862F6E394F0043032C /* Maracas.wav in Resources */,
+				1863D0872F6E394F0043032C /* Conga Mid.wav in Resources */,
+				1863D0882F6E394F0043032C /* Tom Mid.wav in Resources */,
+				1863D0892F6E394F0043032C /* Cymbal.wav in Resources */,
+				1863D08A2F6E394F0043032C /* Snare Mid.wav in Resources */,
+				1863D08B2F6E394F0043032C /* 808.wav in Resources */,
+				1863D08C2F6E394F0043032C /* Kick Basic.wav in Resources */,
+				1863D08D2F6E394F0043032C /* Snare Bright.wav in Resources */,
+				1863D08E2F6E394F0043032C /* Tom High.wav in Resources */,
+				1863D08F2F6E394F0043032C /* Conga High.wav in Resources */,
+				1863D0902F6E394F0043032C /* Open Hat Long.wav in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
