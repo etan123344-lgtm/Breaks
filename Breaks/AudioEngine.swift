@@ -749,16 +749,18 @@ class AudioEngine {
             let newStart = 1.0 - self.padEndPoints[index]
             let newEnd = 1.0 - self.padStartPoints[index]
 
+            // Apply new trim points before rebuilding so the correct region is used
+            self.padStartPoints[index] = newStart
+            self.padEndPoints[index] = newEnd
+
             // Reverse the waveform display data (no need to regenerate)
             let reversedWaveform = self.padWaveforms[index].reversed() as [Float]
 
-            // Rebuild trimmed buffer off main thread
+            // Rebuild trimmed buffer off main thread (now uses correct trim points)
             self.rebuildTrimmedBuffer(for: index)
 
             DispatchQueue.main.async {
                 self.padReversed[index].toggle()
-                self.padStartPoints[index] = newStart
-                self.padEndPoints[index] = newEnd
                 self.padWaveforms[index] = reversedWaveform
             }
         }
@@ -869,20 +871,60 @@ class AudioEngine {
         let url: URL
     }
 
-    static var bundledSounds: [BundledSound] {
+    struct SoundKit: Identifiable {
+        let id: String
+        let name: String
+        let sounds: [BundledSound]
+    }
+
+    private static let kitPrefixes: [(prefix: String, id: String, name: String)] = [
+        ("LD ", "linndrum", "LinnDrum"),
+        ("DT ", "drumtraks", "Sequential Circuits DrumTraks"),
+        ("909 ", "tr909", "TR-909"),
+    ]
+
+    static var soundKits: [SoundKit] {
         guard let urls = Bundle.main.urls(forResourcesWithExtension: "wav", subdirectory: nil) else {
             return []
         }
-        return urls
-            .map { url in
-                let name = url.deletingPathExtension().lastPathComponent
-                return BundledSound(id: name, name: name, url: url)
+        var kitSounds: [String: [BundledSound]] = [:]
+        var tr808: [BundledSound] = []
+        for url in urls {
+            let filename = url.deletingPathExtension().lastPathComponent
+            if let match = kitPrefixes.first(where: { filename.hasPrefix($0.prefix) }) {
+                let name = String(filename.dropFirst(match.prefix.count))
+                kitSounds[match.id, default: []].append(BundledSound(id: filename, name: name, url: url))
+            } else {
+                tr808.append(BundledSound(id: filename, name: filename, url: url))
             }
-            .sorted { $0.name < $1.name }
+        }
+        tr808.sort { $0.name < $1.name }
+        var kits: [SoundKit] = []
+        if !tr808.isEmpty { kits.append(SoundKit(id: "tr808", name: "TR-808", sounds: tr808)) }
+        for entry in kitPrefixes {
+            if var sounds = kitSounds[entry.id], !sounds.isEmpty {
+                sounds.sort { $0.name < $1.name }
+                kits.append(SoundKit(id: entry.id, name: entry.name, sounds: sounds))
+            }
+        }
+        return kits
     }
 
     func loadBundledSound(_ sound: BundledSound, intoPad padIndex: Int) {
         loadAudioFile(url: sound.url, intoPad: padIndex)
+    }
+
+    private var previewPlayer: AVAudioPlayer?
+
+    func previewSound(_ sound: BundledSound) {
+        previewPlayer?.stop()
+        previewPlayer = try? AVAudioPlayer(contentsOf: sound.url)
+        previewPlayer?.play()
+    }
+
+    func stopPreview() {
+        previewPlayer?.stop()
+        previewPlayer = nil
     }
 
     // MARK: - EQ Controls
@@ -908,6 +950,13 @@ class AudioEngine {
     func exportPattern(filename: String? = nil, completion: @escaping (URL?) -> Void) {
         guard !isExporting else { completion(nil); return }
         isExporting = true
+
+        // Stop all playing audio to prevent buffering/latency during export
+        if sequencerPlaying { stopSequencer() }
+        for i in 0..<padCount {
+            voices[i].stop()
+            padIsPlaying[i] = false
+        }
 
         // Snapshot current state for the background thread
         let bpm = self.bpm

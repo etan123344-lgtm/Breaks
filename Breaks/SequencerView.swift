@@ -312,7 +312,7 @@ struct PadDetailSheet: View {
                             Button {
                                 showSoundBrowser = true
                             } label: {
-                                Label("808 Kit", systemImage: "square.grid.2x2")
+                                Label("Sound Kits", systemImage: "square.grid.2x2")
                                     .font(TR808.label(12))
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 12)
@@ -371,7 +371,7 @@ struct PadDetailSheet: View {
                         Button {
                             showSoundBrowser = true
                         } label: {
-                            Label("TR-808 Kit", systemImage: "square.grid.2x2")
+                            Label("Sound Kits", systemImage: "square.grid.2x2")
                                 .font(TR808.label(14, weight: .semibold))
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
@@ -439,30 +439,30 @@ struct SoundBrowserSheet: View {
 
     var body: some View {
         NavigationStack {
-            List(AudioEngine.bundledSounds) { sound in
-                Button {
-                    engine.loadBundledSound(sound, intoPad: padIndex)
-                    dismiss()
+            List(AudioEngine.soundKits) { kit in
+                NavigationLink {
+                    SoundKitListView(engine: engine, kit: kit, padIndex: padIndex, dismiss: dismiss)
                 } label: {
                     HStack {
-                        Image(systemName: "waveform")
+                        Image(systemName: "folder.fill")
                             .foregroundStyle(TR808.accent)
-                            .frame(width: 24)
-                        Text(sound.name)
-                            .font(TR808.label(14))
+                            .frame(width: 28)
+                        Text(kit.name)
+                            .font(TR808.label(15, weight: .semibold))
                             .foregroundStyle(TR808.cream)
                         Spacer()
-                        Image(systemName: "plus.circle")
+                        Text("\(kit.sounds.count)")
+                            .font(TR808.label(12))
                             .foregroundStyle(TR808.silverDim)
                     }
-                    .padding(.vertical, 4)
+                    .padding(.vertical, 6)
                 }
                 .listRowBackground(TR808.surface)
             }
             .listStyle(.plain)
             .background(TR808.bg)
             .scrollContentBackground(.hidden)
-            .navigationTitle("TR-808 KIT")
+            .navigationTitle("SOUND KITS")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -475,6 +475,57 @@ struct SoundBrowserSheet: View {
             .toolbarBackground(.visible, for: .navigationBar)
         }
         .preferredColorScheme(.dark)
+        .onDisappear { engine.stopPreview() }
+    }
+}
+
+struct SoundKitListView: View {
+    @Bindable var engine: AudioEngine
+    let kit: AudioEngine.SoundKit
+    let padIndex: Int
+    let dismiss: DismissAction
+
+    var body: some View {
+        List(kit.sounds) { sound in
+            HStack {
+                Button {
+                    engine.previewSound(sound)
+                } label: {
+                    HStack {
+                        Image(systemName: "play.fill")
+                            .foregroundStyle(TR808.accent)
+                            .frame(width: 24)
+                        Text(sound.name)
+                            .font(TR808.label(14))
+                            .foregroundStyle(TR808.cream)
+                    }
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                Button {
+                    engine.stopPreview()
+                    engine.loadBundledSound(sound, intoPad: padIndex)
+                    dismiss()
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 22))
+                        .foregroundStyle(TR808.accent)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.vertical, 4)
+            .listRowBackground(TR808.surface)
+        }
+        .listStyle(.plain)
+        .background(TR808.bg)
+        .scrollContentBackground(.hidden)
+        .navigationTitle(kit.name.uppercased())
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(TR808.surface, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .onDisappear { engine.stopPreview() }
     }
 }
 
