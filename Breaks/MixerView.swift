@@ -26,10 +26,10 @@ struct MixerView: View {
                 .tracking(2)
 
             mixerChannel(
-                label: "TAPE",
-                value: engine.tapeMix,
-                color: TR808.stepOrange,
-                onChange: { engine.updateTapeMix($0) }
+                label: "SWEET",
+                value: engine.sweetMix,
+                color: TR808.accent,
+                onChange: { engine.updateSweetMix($0) }
             )
             .padding(.top, 20)
 

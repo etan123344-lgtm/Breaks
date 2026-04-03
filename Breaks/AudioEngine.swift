@@ -9,35 +9,26 @@ import AVFoundation
 import AudioToolbox
 import SwiftUI
 
-// MARK: - TapeEffect (custom AU for wow/flutter/warble)
+// MARK: - SweetEffect (preamp: tilt EQ + compression + saturation)
 
-/// Processes audio through a modulated delay line to emulate cassette tape artifacts:
-/// slow pitch drift (wow), fast pitch wobble (flutter), random warble, and treble roll-off.
-final class TapeEffectAU: AUAudioUnit {
+/// A "make it sound good" preamp AU. Warm & thick character with a single mix knob.
+/// Internal chain: tilt EQ (low boost / high rolloff) -> soft-knee compressor -> tanh saturator.
+final class SweetEffectAU: AUAudioUnit {
     private var inputBus: AUAudioUnitBus!
     private var outputBus: AUAudioUnitBus!
     private var _inputBusses: AUAudioUnitBusArray!
     private var _outputBusses: AUAudioUnitBusArray!
 
-    // Delay lines (per-channel circular buffers)
-    private let maxChannels = 2
-    private var delayBuffers: [[Float]] = []
-    private var writeIndices: [Int] = []
-    private let delayBufferSize = 8192
-
-    // LFO phases
-    private var wowPhase: Double = 0
-    private var flutterPhase: Double = 0
-    // One-pole low-pass for treble roll-off (per-channel)
-    private var lpfState: [Float] = [0, 0]
-
-    // Noise state (UInt32 for LCG)
-    private var noiseSeed: UInt32 = 12345
-
     /// Mix amount 0–1, set from main thread
     var mix: Float = 0.0
 
     private var sampleRate: Double = 44100
+
+    // Tilt EQ state (1-pole low-shelf per channel)
+    private var tiltState: [Float] = [0, 0]
+
+    // Compressor state (envelope follower per channel)
+    private var envState: [Float] = [0, 0]
 
     override init(componentDescription: AudioComponentDescription, options: AudioComponentInstantiationOptions = []) throws {
         try super.init(componentDescription: componentDescription, options: options)
@@ -46,8 +37,6 @@ final class TapeEffectAU: AUAudioUnit {
         outputBus = try AUAudioUnitBus(format: format)
         _inputBusses = AUAudioUnitBusArray(audioUnit: self, busType: .input, busses: [inputBus])
         _outputBusses = AUAudioUnitBusArray(audioUnit: self, busType: .output, busses: [outputBus])
-        delayBuffers = (0..<maxChannels).map { _ in Array(repeating: 0, count: delayBufferSize) }
-        writeIndices = Array(repeating: 0, count: maxChannels)
     }
 
     override var inputBusses: AUAudioUnitBusArray { _inputBusses }
@@ -56,92 +45,93 @@ final class TapeEffectAU: AUAudioUnit {
     override func allocateRenderResources() throws {
         try super.allocateRenderResources()
         sampleRate = inputBus.format.sampleRate
-        delayBuffers = (0..<maxChannels).map { _ in Array(repeating: 0, count: delayBufferSize) }
-        writeIndices = Array(repeating: 0, count: maxChannels)
-        wowPhase = 0
-        flutterPhase = 0
-        noiseSeed = 12345
-        lpfState = [0, 0]
+        tiltState = [0, 0]
+        envState = [0, 0]
     }
 
     override var internalRenderBlock: AUInternalRenderBlock {
-        // Capture state for the render thread
-        let delaySize = delayBufferSize
-
         return { [unowned self] actionFlags, timestamp, frameCount, outputBusNumber, outputData, renderEvent, pullInputBlock in
 
             guard let pullInputBlock = pullInputBlock else {
                 return kAudioUnitErr_NoConnection
             }
 
-            // Pull input audio
             var pullFlags: AudioUnitRenderActionFlags = []
             let status = pullInputBlock(&pullFlags, timestamp, frameCount, 0, outputData)
             guard status == noErr else { return status }
 
             let mix = self.mix
-            guard mix > 0.001 else { return noErr } // Bypass when fully dry
+            guard mix > 0.001 else { return noErr }
 
             let frames = Int(frameCount)
-            let sr = self.sampleRate
-
-            // LFO rates
-            let wowRate = 1.2 / sr       // ~1.2 Hz
-            let flutterRate = 7.5 / sr    // ~7.5 Hz
-
-            // Modulation depths in samples
-            let wowDepth = 80.0 * Double(mix)
-            let flutterDepth = 16.0 * Double(mix)
-            let noiseDepth: Float = 2.0 * mix
-
-            // Low-pass coefficient: more mix = more treble loss
-            let lpfCoeff: Float = 1.0 - (0.4 * mix)  // 1.0 = no filter, 0.6 = noticeable roll-off
-
             let bufferListPtr = UnsafeMutableAudioBufferListPointer(outputData)
+            let channelCount = min(bufferListPtr.count, 2)
 
-            let channelCount = min(bufferListPtr.count, self.maxChannels)
+            // Tilt EQ coefficients: 1-pole lowpass at ~800Hz crossover
+            // Warm character: boost lows by ~2dB, cut highs by ~1.5dB
+            let crossoverHz: Float = 800.0
+            let lpCoeff = min(1.0, 2.0 * .pi * crossoverHz / Float(self.sampleRate))
+            let lowBoost: Float = 1.55      // ~+3.8dB
+            let highCut: Float = 0.72       // ~-2.8dB
 
-            for i in 0..<frames {
-                // Advance LFOs once per sample (shared across channels)
-                let wow = sin(self.wowPhase * .pi * 2) * wowDepth
-                let flutter = sin(self.flutterPhase * .pi * 2) * flutterDepth
+            // Compressor constants
+            let threshold: Float = 0.12     // lower threshold, catches more signal
+            let ratio: Float = 5.0
+            let kneeWidth: Float = 0.08     // tighter knee, more obvious onset
+            let attackCoeff: Float = 1.0 - expf(-1.0 / (Float(self.sampleRate) * 0.010))   // ~10ms
+            let releaseCoeff: Float = 1.0 - expf(-1.0 / (Float(self.sampleRate) * 0.100))  // ~100ms
 
-                self.wowPhase += wowRate
-                if self.wowPhase >= 1.0 { self.wowPhase -= 1.0 }
-                self.flutterPhase += flutterRate
-                if self.flutterPhase >= 1.0 { self.flutterPhase -= 1.0 }
+            // Saturator constants
+            let driveGain: Float = 2.8
+            // Compensation: tanh(2.8) ≈ 0.993, so divide by that to keep level
+            let satCompensation: Float = 1.0 / tanhf(driveGain)
 
-                // Noise once per sample
-                self.noiseSeed = self.noiseSeed &* 1103515245 &+ 12345
-                let noiseSample = Float(Int32(bitPattern: self.noiseSeed >> 1)) / Float(Int32.max)
-                let noise = noiseSample * noiseDepth
+            for ch in 0..<channelCount {
+                guard let data = bufferListPtr[ch].mData?.assumingMemoryBound(to: Float.self) else { continue }
 
-                let totalDelay = 200.0 + wow + flutter + Double(noise)
-
-                for ch in 0..<channelCount {
-                    guard let data = bufferListPtr[ch].mData?.assumingMemoryBound(to: Float.self) else { continue }
+                for i in 0..<frames {
                     let dry = data[i]
+                    var sample = dry
 
-                    // Write into this channel's delay buffer
-                    self.delayBuffers[ch][self.writeIndices[ch]] = dry
+                    // --- Stage 1: Tilt EQ ---
+                    // Split into low and high via 1-pole lowpass
+                    self.tiltState[ch] += lpCoeff * (sample - self.tiltState[ch])
+                    let low = self.tiltState[ch]
+                    let high = sample - low
+                    sample = low * lowBoost + high * highCut
 
-                    // Read from modulated position
-                    let readPos = Double(self.writeIndices[ch]) - totalDelay
-                    let readPosWrapped = ((readPos.truncatingRemainder(dividingBy: Double(delaySize))) + Double(delaySize))
-                        .truncatingRemainder(dividingBy: Double(delaySize))
+                    // --- Stage 2: Compressor ---
+                    let absLevel = abs(sample)
+                    // Envelope follower (peak detection with attack/release)
+                    let coeff = absLevel > self.envState[ch] ? attackCoeff : releaseCoeff
+                    self.envState[ch] += coeff * (absLevel - self.envState[ch])
+                    let env = self.envState[ch]
 
-                    let low = Int(readPosWrapped)
-                    let high = (low + 1) % delaySize
-                    let frac = Float(readPosWrapped - Double(low))
-                    let wet = self.delayBuffers[ch][low] * (1 - frac) + self.delayBuffers[ch][high] * frac
+                    // Soft-knee gain computation
+                    var gainReduction: Float = 1.0
+                    if env > threshold + kneeWidth {
+                        // Above knee: full ratio
+                        let overDB = 20.0 * log10f(env / threshold)
+                        let compressedDB = overDB / ratio
+                        gainReduction = powf(10.0, (compressedDB - overDB) / 20.0)
+                    } else if env > threshold - kneeWidth {
+                        // In knee: gradual onset
+                        let kneePos = (env - (threshold - kneeWidth)) / (2.0 * kneeWidth)
+                        let blend = kneePos * kneePos  // quadratic ease-in
+                        let overDB = 20.0 * log10f(max(env, 1e-10) / threshold)
+                        let compressedDB = overDB / ratio
+                        let fullGR = powf(10.0, (compressedDB - overDB) / 20.0)
+                        gainReduction = 1.0 + blend * (fullGR - 1.0)
+                    }
+                    // Auto makeup gain: compensate for average gain reduction
+                    let makeupGain: Float = 1.0 / max(0.5, gainReduction + 0.3)
+                    sample = sample * gainReduction * makeupGain
 
-                    // One-pole low-pass (treble roll-off)
-                    self.lpfState[ch] = lpfCoeff * wet + (1 - lpfCoeff) * self.lpfState[ch]
+                    // --- Stage 3: Saturator ---
+                    sample = tanhf(sample * driveGain) * satCompensation
 
-                    // Mix dry/wet
-                    data[i] = dry * (1 - mix) + self.lpfState[ch] * mix
-
-                    self.writeIndices[ch] = (self.writeIndices[ch] + 1) % delaySize
+                    // --- Dry/wet crossfade ---
+                    data[i] = dry * (1.0 - mix) + sample * mix
                 }
             }
 
@@ -149,10 +139,9 @@ final class TapeEffectAU: AUAudioUnit {
         }
     }
 
-    /// Register this AU so it can be instantiated by component description.
     static let desc = AudioComponentDescription(
         componentType: kAudioUnitType_Effect,
-        componentSubType: fourCC("tape"),
+        componentSubType: fourCC("swet"),
         componentManufacturer: fourCC("Brks"),
         componentFlags: 0,
         componentFlagsMask: 0
@@ -168,9 +157,9 @@ final class TapeEffectAU: AUAudioUnit {
 
     static func register() {
         AUAudioUnit.registerSubclass(
-            TapeEffectAU.self,
+            SweetEffectAU.self,
             as: desc,
-            name: "Breaks: Tape",
+            name: "Breaks: Sweet",
             version: 1
         )
     }
@@ -283,7 +272,7 @@ class AudioEngine {
     var eqGains: [Float] = [0, 0, 0, 0, 0, 0, 0] // -12 to +12 dB
 
     // MARK: - Mixer State
-    var tapeMix: Float = 0.0
+    var sweetMix: Float = 0.0
 
     // MARK: - Audio Engine
     private var engine = AVAudioEngine()
@@ -291,8 +280,8 @@ class AudioEngine {
     private var sourceNodes: [AVAudioSourceNode] = []
     private var padBuffers: [AVAudioPCMBuffer?] = []       // full (untrimmed) buffers for waveform/trim editing
     private var eqNode: AVAudioUnitEQ?
-    private var tapeEffect: AVAudioUnit?
-    private var tapeAU: TapeEffectAU?
+    private var sweetEffect: AVAudioUnit?
+    private var sweetAU: SweetEffectAU?
     private var submixer: AVAudioMixerNode?
     private var engineSampleRate: Double = 44100
     private var playerFormat: AVAudioFormat!
@@ -399,17 +388,17 @@ class AudioEngine {
         eqNode = eq
         engine.attach(eq)
 
-        // Tape effect
-        TapeEffectAU.register()
-        let tapeNode = AVAudioUnitEffect(audioComponentDescription: TapeEffectAU.desc)
-        tapeEffect = tapeNode
-        tapeAU = tapeNode.auAudioUnit as? TapeEffectAU
-        engine.attach(tapeNode)
+        // Sweet effect
+        SweetEffectAU.register()
+        let sweetNode = AVAudioUnitEffect(audioComponentDescription: SweetEffectAU.desc)
+        sweetEffect = sweetNode
+        sweetAU = sweetNode.auAudioUnit as? SweetEffectAU
+        engine.attach(sweetNode)
 
-        // Signal chain: submixer -> EQ -> tape -> mainMixer
+        // Signal chain: submixer -> EQ -> Sweet -> mainMixer
         engine.connect(sub, to: eq, format: stereoFormat)
-        engine.connect(eq, to: tapeNode, format: stereoFormat)
-        engine.connect(tapeNode, to: mainMixer, format: stereoFormat)
+        engine.connect(eq, to: sweetNode, format: stereoFormat)
+        engine.connect(sweetNode, to: mainMixer, format: stereoFormat)
 
         do {
             try engine.start()
@@ -906,9 +895,9 @@ class AudioEngine {
 
     // MARK: - Mixer Controls
 
-    func updateTapeMix(_ value: Float) {
-        tapeMix = value
-        tapeAU?.mix = value
+    func updateSweetMix(_ value: Float) {
+        sweetMix = value
+        sweetAU?.mix = value
     }
 
     // MARK: - Export
@@ -927,7 +916,7 @@ class AudioEngine {
         let pattern = self.pattern
         let eqGains = self.eqGains
         let eqFrequencies = self.eqFrequencies
-        let tapeMix = self.tapeMix
+        let sweetMix = self.sweetMix
         let sampleRate = self.engineSampleRate
 
         // Snapshot per-pad state and buffers (nil = pad has no audio)
@@ -976,7 +965,7 @@ class AudioEngine {
                 padSnapshots: padSnapshots,
                 eqGains: eqGains,
                 eqFrequencies: eqFrequencies,
-                tapeMix: tapeMix,
+                sweetMix: sweetMix,
                 sampleRate: sampleRate,
                 filename: exportFilename
             )
@@ -996,7 +985,7 @@ class AudioEngine {
         padSnapshots: [(buffer: AVAudioPCMBuffer, volume: Float, rate: Double)?],
         eqGains: [Float],
         eqFrequencies: [Float],
-        tapeMix: Float,
+        sweetMix: Float,
         sampleRate: Double,
         filename: String? = nil
     ) -> URL? {
@@ -1049,16 +1038,16 @@ class AudioEngine {
         }
         offlineEngine.attach(eq)
 
-        // Tape effect
-        let tapeNode = AVAudioUnitEffect(audioComponentDescription: TapeEffectAU.desc)
-        offlineEngine.attach(tapeNode)
-        (tapeNode.auAudioUnit as? TapeEffectAU)?.mix = tapeMix
+        // Sweet effect
+        let sweetNode = AVAudioUnitEffect(audioComponentDescription: SweetEffectAU.desc)
+        offlineEngine.attach(sweetNode)
+        (sweetNode.auAudioUnit as? SweetEffectAU)?.mix = sweetMix
 
-        // Signal chain: sub -> EQ -> tape -> mainMixer
+        // Signal chain: sub -> EQ -> Sweet -> mainMixer
         let mainMixer = offlineEngine.mainMixerNode
         offlineEngine.connect(sub, to: eq, format: stereoFormat)
-        offlineEngine.connect(eq, to: tapeNode, format: stereoFormat)
-        offlineEngine.connect(tapeNode, to: mainMixer, format: stereoFormat)
+        offlineEngine.connect(eq, to: sweetNode, format: stereoFormat)
+        offlineEngine.connect(sweetNode, to: mainMixer, format: stereoFormat)
 
         do {
             try offlineEngine.start()
@@ -1151,3 +1140,4 @@ class AudioEngine {
         return outputURL
     }
 }
+

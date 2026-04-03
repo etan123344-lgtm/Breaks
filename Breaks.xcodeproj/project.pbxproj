@@ -34,7 +34,6 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		1863CFAC2F6B9CC60043032C /* Breaks.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = Breaks.app; path = "/Users/mayihavecrumbofcoochieplz/Desktop/Breaks/build/Debug-iphoneos/Breaks.app"; sourceTree = "<absolute>"; };
 		1863D0602F6E394F0043032C /* 808.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = 808.wav; sourceTree = "<group>"; };
 		1863D0612F6E394F0043032C /* Clap.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Clap.wav; sourceTree = "<group>"; };
 		1863D0622F6E394F0043032C /* Claves.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Claves.wav; sourceTree = "<group>"; };
@@ -59,6 +58,7 @@
 		1863D0752F6E394F0043032C /* Tom High.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "Tom High.wav"; sourceTree = "<group>"; };
 		1863D0762F6E394F0043032C /* Tom Low.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "Tom Low.wav"; sourceTree = "<group>"; };
 		1863D0772F6E394F0043032C /* Tom Mid.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "Tom Mid.wav"; sourceTree = "<group>"; };
+		187927B42F730A01001789F5 /* Breaks.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Breaks.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -85,6 +85,7 @@
 			children = (
 				1863CFAE2F6B9CC60043032C /* Breaks */,
 				1863D0782F6E394F0043032C /* TR-808 Kit */,
+				187927B42F730A01001789F5 /* Breaks.app */,
 			);
 			sourceTree = "<group>";
 		};
@@ -141,7 +142,7 @@
 			packageProductDependencies = (
 			);
 			productName = Breaks;
-			productReference = 1863CFAC2F6B9CC60043032C /* Breaks.app */;
+			productReference = 187927B42F730A01001789F5 /* Breaks.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -349,6 +350,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = TV5335TD3U;
@@ -382,6 +384,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = TV5335TD3U;
