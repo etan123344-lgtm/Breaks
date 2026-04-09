@@ -940,6 +940,7 @@ class AudioEngine {
         ("LD ", "linndrum", "LinnDrum"),
         ("DT ", "drumtraks", "Sequential Circuits DrumTraks"),
         ("909 ", "tr909", "TR-909"),
+        ("505 ", "tr505", "TR-505"),
     ]
 
     static var soundKits: [SoundKit] {

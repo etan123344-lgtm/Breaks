@@ -64,6 +64,22 @@
 		181E3B942F805492006DCDBB /* 909 Crash 3.wav in Resources */ = {isa = PBXBuildFile; fileRef = 181E3B6E2F805492006DCDBB /* 909 Crash 3.wav */; };
 		181E3B952F805492006DCDBB /* 909 Hi Hat 1.wav in Resources */ = {isa = PBXBuildFile; fileRef = 181E3B6F2F805492006DCDBB /* 909 Hi Hat 1.wav */; };
 		181E3B962F805492006DCDBB /* 909 Clap 1.wav in Resources */ = {isa = PBXBuildFile; fileRef = 181E3B682F805492006DCDBB /* 909 Clap 1.wav */; };
+		181E3BBC2F87FC69006DCDBB /* 505 Tom2.wav in Resources */ = {isa = PBXBuildFile; fileRef = 181E3BB92F87FC69006DCDBB /* 505 Tom2.wav */; };
+		181E3BBD2F87FC69006DCDBB /* 505 Rim.wav in Resources */ = {isa = PBXBuildFile; fileRef = 181E3BB52F87FC69006DCDBB /* 505 Rim.wav */; };
+		181E3BBE2F87FC69006DCDBB /* 505 Crash.wav in Resources */ = {isa = PBXBuildFile; fileRef = 181E3BB12F87FC69006DCDBB /* 505 Crash.wav */; };
+		181E3BBF2F87FC69006DCDBB /* 505 Timbale.wav in Resources */ = {isa = PBXBuildFile; fileRef = 181E3BB72F87FC69006DCDBB /* 505 Timbale.wav */; };
+		181E3BC02F87FC69006DCDBB /* 505 Tom3.wav in Resources */ = {isa = PBXBuildFile; fileRef = 181E3BBA2F87FC69006DCDBB /* 505 Tom3.wav */; };
+		181E3BC12F87FC69006DCDBB /* 505 Conga Low.wav in Resources */ = {isa = PBXBuildFile; fileRef = 181E3BAE2F87FC69006DCDBB /* 505 Conga Low.wav */; };
+		181E3BC22F87FC69006DCDBB /* 505 Kick.wav in Resources */ = {isa = PBXBuildFile; fileRef = 181E3BB22F87FC69006DCDBB /* 505 Kick.wav */; };
+		181E3BC32F87FC69006DCDBB /* 505 Conga Hi.wav in Resources */ = {isa = PBXBuildFile; fileRef = 181E3BAD2F87FC69006DCDBB /* 505 Conga Hi.wav */; };
+		181E3BC42F87FC69006DCDBB /* 505 Ride.wav in Resources */ = {isa = PBXBuildFile; fileRef = 181E3BB42F87FC69006DCDBB /* 505 Ride.wav */; };
+		181E3BC52F87FC69006DCDBB /* 505 OHH.wav in Resources */ = {isa = PBXBuildFile; fileRef = 181E3BB32F87FC69006DCDBB /* 505 OHH.wav */; };
+		181E3BC62F87FC69006DCDBB /* 505 Cowbell Hi.wav in Resources */ = {isa = PBXBuildFile; fileRef = 181E3BAF2F87FC69006DCDBB /* 505 Cowbell Hi.wav */; };
+		181E3BC72F87FC69006DCDBB /* 505 CHH.wav in Resources */ = {isa = PBXBuildFile; fileRef = 181E3BAB2F87FC69006DCDBB /* 505 CHH.wav */; };
+		181E3BC82F87FC69006DCDBB /* 505 Snare.wav in Resources */ = {isa = PBXBuildFile; fileRef = 181E3BB62F87FC69006DCDBB /* 505 Snare.wav */; };
+		181E3BC92F87FC69006DCDBB /* 505 Cowbell Low.wav in Resources */ = {isa = PBXBuildFile; fileRef = 181E3BB02F87FC69006DCDBB /* 505 Cowbell Low.wav */; };
+		181E3BCA2F87FC69006DCDBB /* 505 Clap.wav in Resources */ = {isa = PBXBuildFile; fileRef = 181E3BAC2F87FC69006DCDBB /* 505 Clap.wav */; };
+		181E3BCB2F87FC69006DCDBB /* 505 Tom1.wav in Resources */ = {isa = PBXBuildFile; fileRef = 181E3BB82F87FC69006DCDBB /* 505 Tom1.wav */; };
 		1863D0792F6E394F0043032C /* Claves.wav in Resources */ = {isa = PBXBuildFile; fileRef = 1863D0622F6E394F0043032C /* Claves.wav */; };
 		1863D07A2F6E394F0043032C /* Rimshot.wav in Resources */ = {isa = PBXBuildFile; fileRef = 1863D0702F6E394F0043032C /* Rimshot.wav */; };
 		1863D07B2F6E394F0043032C /* Conga Low.wav in Resources */ = {isa = PBXBuildFile; fileRef = 1863D0642F6E394F0043032C /* Conga Low.wav */; };
@@ -148,6 +164,22 @@
 		181E3B7C2F805492006DCDBB /* 909 Tom 2.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "909 Tom 2.wav"; sourceTree = "<group>"; };
 		181E3B7D2F805492006DCDBB /* 909 Tom 3.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "909 Tom 3.wav"; sourceTree = "<group>"; };
 		181E3B7E2F805492006DCDBB /* 909 Tom 4.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "909 Tom 4.wav"; sourceTree = "<group>"; };
+		181E3BAB2F87FC69006DCDBB /* 505 CHH.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "505 CHH.wav"; sourceTree = "<group>"; };
+		181E3BAC2F87FC69006DCDBB /* 505 Clap.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "505 Clap.wav"; sourceTree = "<group>"; };
+		181E3BAD2F87FC69006DCDBB /* 505 Conga Hi.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "505 Conga Hi.wav"; sourceTree = "<group>"; };
+		181E3BAE2F87FC69006DCDBB /* 505 Conga Low.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "505 Conga Low.wav"; sourceTree = "<group>"; };
+		181E3BAF2F87FC69006DCDBB /* 505 Cowbell Hi.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "505 Cowbell Hi.wav"; sourceTree = "<group>"; };
+		181E3BB02F87FC69006DCDBB /* 505 Cowbell Low.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "505 Cowbell Low.wav"; sourceTree = "<group>"; };
+		181E3BB12F87FC69006DCDBB /* 505 Crash.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "505 Crash.wav"; sourceTree = "<group>"; };
+		181E3BB22F87FC69006DCDBB /* 505 Kick.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "505 Kick.wav"; sourceTree = "<group>"; };
+		181E3BB32F87FC69006DCDBB /* 505 OHH.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "505 OHH.wav"; sourceTree = "<group>"; };
+		181E3BB42F87FC69006DCDBB /* 505 Ride.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "505 Ride.wav"; sourceTree = "<group>"; };
+		181E3BB52F87FC69006DCDBB /* 505 Rim.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "505 Rim.wav"; sourceTree = "<group>"; };
+		181E3BB62F87FC69006DCDBB /* 505 Snare.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "505 Snare.wav"; sourceTree = "<group>"; };
+		181E3BB72F87FC69006DCDBB /* 505 Timbale.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "505 Timbale.wav"; sourceTree = "<group>"; };
+		181E3BB82F87FC69006DCDBB /* 505 Tom1.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "505 Tom1.wav"; sourceTree = "<group>"; };
+		181E3BB92F87FC69006DCDBB /* 505 Tom2.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "505 Tom2.wav"; sourceTree = "<group>"; };
+		181E3BBA2F87FC69006DCDBB /* 505 Tom3.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "505 Tom3.wav"; sourceTree = "<group>"; };
 		1863D0602F6E394F0043032C /* 808.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = 808.wav; sourceTree = "<group>"; };
 		1863D0612F6E394F0043032C /* Clap.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Clap.wav; sourceTree = "<group>"; };
 		1863D0622F6E394F0043032C /* Claves.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Claves.wav; sourceTree = "<group>"; };
@@ -272,6 +304,29 @@
 			path = "TR-909 Kit";
 			sourceTree = "<group>";
 		};
+		181E3BBB2F87FC69006DCDBB /* Roland TR-505 */ = {
+			isa = PBXGroup;
+			children = (
+				181E3BAB2F87FC69006DCDBB /* 505 CHH.wav */,
+				181E3BAC2F87FC69006DCDBB /* 505 Clap.wav */,
+				181E3BAD2F87FC69006DCDBB /* 505 Conga Hi.wav */,
+				181E3BAE2F87FC69006DCDBB /* 505 Conga Low.wav */,
+				181E3BAF2F87FC69006DCDBB /* 505 Cowbell Hi.wav */,
+				181E3BB02F87FC69006DCDBB /* 505 Cowbell Low.wav */,
+				181E3BB12F87FC69006DCDBB /* 505 Crash.wav */,
+				181E3BB22F87FC69006DCDBB /* 505 Kick.wav */,
+				181E3BB32F87FC69006DCDBB /* 505 OHH.wav */,
+				181E3BB42F87FC69006DCDBB /* 505 Ride.wav */,
+				181E3BB52F87FC69006DCDBB /* 505 Rim.wav */,
+				181E3BB62F87FC69006DCDBB /* 505 Snare.wav */,
+				181E3BB72F87FC69006DCDBB /* 505 Timbale.wav */,
+				181E3BB82F87FC69006DCDBB /* 505 Tom1.wav */,
+				181E3BB92F87FC69006DCDBB /* 505 Tom2.wav */,
+				181E3BBA2F87FC69006DCDBB /* 505 Tom3.wav */,
+			);
+			path = "Roland TR-505";
+			sourceTree = "<group>";
+		};
 		1863CFA32F6B9CC60043032C = {
 			isa = PBXGroup;
 			children = (
@@ -281,6 +336,7 @@
 				181E3AA82F802080006DCDBB /* LinnDrum Kit */,
 				181E3B342F803D4C006DCDBB /* Sequential Circuits DrumTraks Kit */,
 				181E3B7F2F805492006DCDBB /* TR-909 Kit */,
+				181E3BBB2F87FC69006DCDBB /* Roland TR-505 */,
 			);
 			sourceTree = "<group>";
 		};
@@ -449,6 +505,22 @@
 				181E3AE32F802080006DCDBB /* LD Tambourine Soft.wav in Resources */,
 				181E3AE82F802080006DCDBB /* LD Tom1.wav in Resources */,
 				181E3AE92F802080006DCDBB /* LD Kick Soft.wav in Resources */,
+				181E3BBC2F87FC69006DCDBB /* 505 Tom2.wav in Resources */,
+				181E3BBD2F87FC69006DCDBB /* 505 Rim.wav in Resources */,
+				181E3BBE2F87FC69006DCDBB /* 505 Crash.wav in Resources */,
+				181E3BBF2F87FC69006DCDBB /* 505 Timbale.wav in Resources */,
+				181E3BC02F87FC69006DCDBB /* 505 Tom3.wav in Resources */,
+				181E3BC12F87FC69006DCDBB /* 505 Conga Low.wav in Resources */,
+				181E3BC22F87FC69006DCDBB /* 505 Kick.wav in Resources */,
+				181E3BC32F87FC69006DCDBB /* 505 Conga Hi.wav in Resources */,
+				181E3BC42F87FC69006DCDBB /* 505 Ride.wav in Resources */,
+				181E3BC52F87FC69006DCDBB /* 505 OHH.wav in Resources */,
+				181E3BC62F87FC69006DCDBB /* 505 Cowbell Hi.wav in Resources */,
+				181E3BC72F87FC69006DCDBB /* 505 CHH.wav in Resources */,
+				181E3BC82F87FC69006DCDBB /* 505 Snare.wav in Resources */,
+				181E3BC92F87FC69006DCDBB /* 505 Cowbell Low.wav in Resources */,
+				181E3BCA2F87FC69006DCDBB /* 505 Clap.wav in Resources */,
+				181E3BCB2F87FC69006DCDBB /* 505 Tom1.wav in Resources */,
 				181E3AEB2F802080006DCDBB /* LD Hat Close.wav in Resources */,
 				181E3AED2F802080006DCDBB /* LD Sidestick.wav in Resources */,
 				181E3AF02F802080006DCDBB /* LD Hat Med.wav in Resources */,
