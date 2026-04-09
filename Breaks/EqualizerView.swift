@@ -20,7 +20,7 @@ struct EqualizerView: View {
             }
             .padding(.horizontal, 20)
 
-            Text("GRAPHIC EQ")
+            Text("MASTER EQ")
                 .font(TR808.label(13))
                 .foregroundStyle(TR808.silver)
                 .tracking(2)

@@ -231,7 +231,7 @@ struct PadDetailSheet: View {
                         .font(TR808.label(12, weight: .bold))
                         .foregroundStyle(color)
 
-                    // Volume control
+                    // Gain control
                     HStack(spacing: 10) {
                         Image(systemName: "speaker.fill")
                             .font(.system(size: 11))
@@ -241,16 +241,16 @@ struct PadDetailSheet: View {
                                 get: { engine.padVolumes[padIndex] },
                                 set: { engine.updatePadVolume(padIndex, volume: $0) }
                             ),
-                            in: 0...1
+                            in: -60...12
                         )
                         .tint(color)
                         Image(systemName: "speaker.wave.3.fill")
                             .font(.system(size: 11))
                             .foregroundStyle(TR808.silverDim)
-                        Text("\(Int(engine.padVolumes[padIndex] * 100))%")
+                        Text(gainLabel(engine.padVolumes[padIndex]))
                             .font(TR808.readout(11))
                             .foregroundStyle(TR808.silver)
-                            .frame(width: 38, alignment: .trailing)
+                            .frame(width: 52, alignment: .trailing)
                     }
                     .padding(.horizontal)
 
@@ -275,6 +275,31 @@ struct PadDetailSheet: View {
                             .font(TR808.readout(11))
                             .foregroundStyle(TR808.silver)
                             .frame(width: 38, alignment: .trailing)
+                    }
+                    .padding(.horizontal)
+
+                    // Per-pad EQ
+                    VStack(spacing: 8) {
+                        HStack {
+                            Text("EQ")
+                                .font(TR808.label(11, weight: .bold))
+                                .foregroundStyle(TR808.silver)
+                            Spacer()
+                            Button {
+                                engine.resetPadEQ(padIndex)
+                            } label: {
+                                Text("Flat")
+                                    .font(TR808.label(10))
+                                    .foregroundStyle(TR808.silverDim)
+                            }
+                        }
+
+                        HStack(alignment: .bottom, spacing: 6) {
+                            ForEach(0..<engine.eqFrequencies.count, id: \.self) { band in
+                                padEQBand(padIndex: padIndex, band: band, color: color)
+                            }
+                        }
+                        .frame(height: 120)
                     }
                     .padding(.horizontal)
 
@@ -427,6 +452,69 @@ struct PadDetailSheet: View {
             }
         }
         .preferredColorScheme(.dark)
+    }
+
+    private func padEQBand(padIndex: Int, band: Int, color: Color) -> some View {
+        VStack(spacing: 4) {
+            // dB label
+            Text(String(format: "%+.0f", engine.padEQGains[padIndex][band]))
+                .font(TR808.readout(8))
+                .foregroundStyle(engine.padEQGains[padIndex][band] == 0 ? TR808.silverDim : color)
+                .frame(height: 12)
+
+            // Vertical slider
+            GeometryReader { geo in
+                let range: Float = 24.0
+                let normalized = CGFloat((engine.padEQGains[padIndex][band] + 12.0) / range)
+                let trackHeight = geo.size.height
+                let thumbY = trackHeight * (1 - normalized)
+
+                ZStack(alignment: .bottom) {
+                    Capsule()
+                        .fill(TR808.surface)
+                        .frame(width: 6)
+                        .frame(maxHeight: .infinity)
+                        .frame(maxWidth: .infinity)
+
+                    Capsule()
+                        .fill(color.opacity(0.5))
+                        .frame(width: 6, height: max(0, trackHeight * normalized))
+                        .frame(maxWidth: .infinity)
+                }
+                .overlay(alignment: .top) {
+                    Circle()
+                        .fill(color)
+                        .frame(width: 14, height: 14)
+                        .shadow(color: color.opacity(0.3), radius: 3)
+                        .offset(y: thumbY - 7)
+                }
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            let fraction = 1 - (value.location.y / trackHeight)
+                            let clamped = max(0, min(1, Float(fraction)))
+                            let gain = clamped * range - 12.0
+                            engine.updatePadEQ(padIndex, band: band, gain: gain)
+                        }
+                )
+            }
+
+            // Frequency label
+            Text(engine.eqLabels[band])
+                .font(TR808.readout(7))
+                .foregroundStyle(TR808.silverDim)
+        }
+    }
+
+    private func gainLabel(_ db: Float) -> String {
+        if db <= -60 {
+            return "-∞ dB"
+        } else if db >= 0 {
+            return String(format: "+%.1f dB", db)
+        } else {
+            return String(format: "%.1f dB", db)
+        }
     }
 }
 

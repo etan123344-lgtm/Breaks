@@ -251,10 +251,11 @@ class AudioEngine {
     var padWaveforms: [[Float]]       // downsampled amplitude data for display
     var padStartPoints: [Float]       // normalized 0–1
     var padEndPoints: [Float]         // normalized 0–1
-    var padVolumes: [Float]           // 0.0–1.0
+    var padVolumes: [Float]           // dB, -60 to +12 (0 = unity)
     var padPitchSemitones: [Float]    // -12 to +12
     var padDurations: [Double]            // total duration in seconds
     var padReversed: [Bool]               // whether pad audio is reversed
+    var padEQGains: [[Float]]             // per-pad EQ gains, 8 pads × 7 bands
     var isRecording = false
     var recordingPadIndex: Int? = nil
 
@@ -273,6 +274,12 @@ class AudioEngine {
 
     // MARK: - Mixer State
     var sweetMix: Float = 0.0
+    var reverbMix: Float = 0.0
+    var reverbPreset: AVAudioUnitReverbPreset = .smallRoom
+    var delayMix: Float = 0.0
+    var delayTime: Float = 0.3          // seconds, 0–2
+    var delayFeedback: Float = 50.0     // percent, -100–100
+    var delayLowPassCutoff: Float = 15000 // Hz, 10–(sampleRate/2)
 
     // MARK: - Audio Engine
     private var engine = AVAudioEngine()
@@ -280,8 +287,11 @@ class AudioEngine {
     private var sourceNodes: [AVAudioSourceNode] = []
     private var padBuffers: [AVAudioPCMBuffer?] = []       // full (untrimmed) buffers for waveform/trim editing
     private var eqNode: AVAudioUnitEQ?
+    private var padEQNodes: [AVAudioUnitEQ] = []
     private var sweetEffect: AVAudioUnit?
     private var sweetAU: SweetEffectAU?
+    private var reverbNode: AVAudioUnitReverb?
+    private var delayNode: AVAudioUnitDelay?
     private var submixer: AVAudioMixerNode?
     private var engineSampleRate: Double = 44100
     private var playerFormat: AVAudioFormat!
@@ -307,10 +317,11 @@ class AudioEngine {
         padWaveforms = Array(repeating: [], count: 8)
         padStartPoints = Array(repeating: 0, count: 8)
         padEndPoints = Array(repeating: 1, count: 8)
-        padVolumes = Array(repeating: 1.0, count: 8)
+        padVolumes = Array(repeating: 0.0, count: 8)
         padPitchSemitones = Array(repeating: 0, count: 8)
         padDurations = Array(repeating: 0, count: 8)
         padReversed = Array(repeating: false, count: 8)
+        padEQGains = Array(repeating: Array(repeating: Float(0), count: 7), count: 8)
         pattern = Array(repeating: Array(repeating: false, count: 16), count: 8)
         padBuffers = Array(repeating: nil, count: 8)
         setupAudio()
@@ -359,7 +370,7 @@ class AudioEngine {
         engine.attach(sub)
         submixer = sub
 
-        // Create 8 source nodes with render callbacks (replaces AVAudioPlayerNode)
+        // Create 8 source nodes with render callbacks and per-pad EQ
         for _ in 0..<padCount {
             let voice = PadVoice()
             voices.append(voice)
@@ -372,7 +383,22 @@ class AudioEngine {
             }
             sourceNodes.append(sourceNode)
             engine.attach(sourceNode)
-            engine.connect(sourceNode, to: sub, format: monoFormat)
+
+            // Per-pad EQ
+            let padEQ = AVAudioUnitEQ(numberOfBands: eqFrequencies.count)
+            for (i, freq) in eqFrequencies.enumerated() {
+                let band = padEQ.bands[i]
+                band.filterType = .parametric
+                band.frequency = freq
+                band.bandwidth = 1.0
+                band.gain = 0
+                band.bypass = false
+            }
+            padEQNodes.append(padEQ)
+            engine.attach(padEQ)
+
+            engine.connect(sourceNode, to: padEQ, format: monoFormat)
+            engine.connect(padEQ, to: sub, format: monoFormat)
         }
 
         // EQ
@@ -395,10 +421,28 @@ class AudioEngine {
         sweetAU = sweetNode.auAudioUnit as? SweetEffectAU
         engine.attach(sweetNode)
 
-        // Signal chain: submixer -> EQ -> Sweet -> mainMixer
+        // Reverb
+        let reverb = AVAudioUnitReverb()
+        reverb.loadFactoryPreset(.smallRoom)
+        reverb.wetDryMix = 0
+        reverbNode = reverb
+        engine.attach(reverb)
+
+        // Delay
+        let delay = AVAudioUnitDelay()
+        delay.wetDryMix = 0
+        delay.delayTime = TimeInterval(delayTime)
+        delay.feedback = delayFeedback
+        delay.lowPassCutoff = delayLowPassCutoff
+        delayNode = delay
+        engine.attach(delay)
+
+        // Signal chain: submixer -> EQ -> Sweet -> Delay -> Reverb -> mainMixer
         engine.connect(sub, to: eq, format: stereoFormat)
         engine.connect(eq, to: sweetNode, format: stereoFormat)
-        engine.connect(sweetNode, to: mainMixer, format: stereoFormat)
+        engine.connect(sweetNode, to: delay, format: stereoFormat)
+        engine.connect(delay, to: reverb, format: stereoFormat)
+        engine.connect(reverb, to: mainMixer, format: stereoFormat)
 
         do {
             try engine.start()
@@ -703,7 +747,21 @@ class AudioEngine {
     func updatePadVolume(_ index: Int, volume: Float) {
         guard index < padCount else { return }
         padVolumes[index] = volume
-        voices[index].volume = volume
+        voices[index].volume = volume <= -60 ? 0 : pow(10, volume / 20)
+    }
+
+    func updatePadEQ(_ padIndex: Int, band: Int, gain: Float) {
+        guard padIndex < padCount, band < eqFrequencies.count else { return }
+        padEQGains[padIndex][band] = gain
+        padEQNodes[padIndex].bands[band].gain = gain
+    }
+
+    func resetPadEQ(_ padIndex: Int) {
+        guard padIndex < padCount else { return }
+        for band in 0..<eqFrequencies.count {
+            padEQGains[padIndex][band] = 0
+            padEQNodes[padIndex].bands[band].gain = 0
+        }
     }
 
     func updatePadPitch(_ index: Int, semitones: Float) {
@@ -722,12 +780,13 @@ class AudioEngine {
         padEndPoints[index] = 1
         padDurations[index] = 0
         padLabels[index] = "PAD \(index + 1)"
-        padVolumes[index] = 1.0
+        padVolumes[index] = 0.0
         voices[index].volume = 1.0
         padPitchSemitones[index] = 0
         voices[index].rate = 1.0
         padReversed[index] = false
         padIsPlaying[index] = false
+        resetPadEQ(index)
     }
 
     func reversePad(_ index: Int) {
@@ -942,6 +1001,36 @@ class AudioEngine {
         sweetAU?.mix = value
     }
 
+    func updateReverbMix(_ value: Float) {
+        reverbMix = value
+        reverbNode?.wetDryMix = value * 100
+    }
+
+    func updateReverbPreset(_ preset: AVAudioUnitReverbPreset) {
+        reverbPreset = preset
+        reverbNode?.loadFactoryPreset(preset)
+    }
+
+    func updateDelayMix(_ value: Float) {
+        delayMix = value
+        delayNode?.wetDryMix = value * 100
+    }
+
+    func updateDelayTime(_ value: Float) {
+        delayTime = value
+        delayNode?.delayTime = TimeInterval(value)
+    }
+
+    func updateDelayFeedback(_ value: Float) {
+        delayFeedback = value
+        delayNode?.feedback = value
+    }
+
+    func updateDelayLowPassCutoff(_ value: Float) {
+        delayLowPassCutoff = value
+        delayNode?.lowPassCutoff = value
+    }
+
     // MARK: - Export
 
     var isExporting = false
@@ -965,7 +1054,14 @@ class AudioEngine {
         let pattern = self.pattern
         let eqGains = self.eqGains
         let eqFrequencies = self.eqFrequencies
+        let padEQGains = self.padEQGains
         let sweetMix = self.sweetMix
+        let reverbMix = self.reverbMix
+        let reverbPreset = self.reverbPreset
+        let delayMix = self.delayMix
+        let delayTime = self.delayTime
+        let delayFeedback = self.delayFeedback
+        let delayLowPassCutoff = self.delayLowPassCutoff
         let sampleRate = self.engineSampleRate
 
         // Snapshot per-pad state and buffers (nil = pad has no audio)
@@ -1000,7 +1096,8 @@ class AudioEngine {
                 dstData[trimmedLength - 1 - j] *= gain
             }
 
-            padSnapshots.append((buf, padVolumes[i], pow(2.0, Double(padPitchSemitones[i]) / 12.0)))
+            let linearGain = padVolumes[i] <= -60 ? Float(0) : pow(10, padVolumes[i] / 20)
+            padSnapshots.append((buf, linearGain, pow(2.0, Double(padPitchSemitones[i]) / 12.0)))
         }
 
         let exportFilename = filename
@@ -1012,9 +1109,16 @@ class AudioEngine {
                 padCount: padCount,
                 pattern: pattern,
                 padSnapshots: padSnapshots,
+                padEQGains: padEQGains,
                 eqGains: eqGains,
                 eqFrequencies: eqFrequencies,
                 sweetMix: sweetMix,
+                reverbMix: reverbMix,
+                reverbPreset: reverbPreset,
+                delayMix: delayMix,
+                delayTime: delayTime,
+                delayFeedback: delayFeedback,
+                delayLowPassCutoff: delayLowPassCutoff,
                 sampleRate: sampleRate,
                 filename: exportFilename
             )
@@ -1032,9 +1136,16 @@ class AudioEngine {
         padCount: Int,
         pattern: [[Bool]],
         padSnapshots: [(buffer: AVAudioPCMBuffer, volume: Float, rate: Double)?],
+        padEQGains: [[Float]],
         eqGains: [Float],
         eqFrequencies: [Float],
         sweetMix: Float,
+        reverbMix: Float,
+        reverbPreset: AVAudioUnitReverbPreset,
+        delayMix: Float,
+        delayTime: Float,
+        delayFeedback: Float,
+        delayLowPassCutoff: Float,
         sampleRate: Double,
         filename: String? = nil
     ) -> URL? {
@@ -1072,7 +1183,21 @@ class AudioEngine {
                 return noErr
             }
             offlineEngine.attach(sourceNode)
-            offlineEngine.connect(sourceNode, to: sub, format: monoFormat)
+
+            // Per-pad EQ
+            let padEQ = AVAudioUnitEQ(numberOfBands: eqFrequencies.count)
+            for (b, freq) in eqFrequencies.enumerated() {
+                let band = padEQ.bands[b]
+                band.filterType = .parametric
+                band.frequency = freq
+                band.bandwidth = 1.0
+                band.gain = padEQGains[i][b]
+                band.bypass = false
+            }
+            offlineEngine.attach(padEQ)
+
+            offlineEngine.connect(sourceNode, to: padEQ, format: monoFormat)
+            offlineEngine.connect(padEQ, to: sub, format: monoFormat)
         }
 
         // EQ
@@ -1092,11 +1217,27 @@ class AudioEngine {
         offlineEngine.attach(sweetNode)
         (sweetNode.auAudioUnit as? SweetEffectAU)?.mix = sweetMix
 
-        // Signal chain: sub -> EQ -> Sweet -> mainMixer
+        // Reverb
+        let reverb = AVAudioUnitReverb()
+        reverb.loadFactoryPreset(reverbPreset)
+        reverb.wetDryMix = reverbMix * 100
+        offlineEngine.attach(reverb)
+
+        // Delay
+        let delay = AVAudioUnitDelay()
+        delay.wetDryMix = delayMix * 100
+        delay.delayTime = TimeInterval(delayTime)
+        delay.feedback = delayFeedback
+        delay.lowPassCutoff = delayLowPassCutoff
+        offlineEngine.attach(delay)
+
+        // Signal chain: sub -> EQ -> Sweet -> Delay -> Reverb -> mainMixer
         let mainMixer = offlineEngine.mainMixerNode
         offlineEngine.connect(sub, to: eq, format: stereoFormat)
         offlineEngine.connect(eq, to: sweetNode, format: stereoFormat)
-        offlineEngine.connect(sweetNode, to: mainMixer, format: stereoFormat)
+        offlineEngine.connect(sweetNode, to: delay, format: stereoFormat)
+        offlineEngine.connect(delay, to: reverb, format: stereoFormat)
+        offlineEngine.connect(reverb, to: mainMixer, format: stereoFormat)
 
         do {
             try offlineEngine.start()
@@ -1108,13 +1249,7 @@ class AudioEngine {
         // Calculate total frames to render
         let stepInterval = 60.0 / bpm / 4.0
         let framesPerStep = Int(stepInterval * sampleRate)
-        let longestPadDuration = padSnapshots.compactMap { snap -> Double? in
-            guard let snap else { return nil }
-            guard snap.buffer.frameLength > 0 else { return nil }
-            return Double(snap.buffer.frameLength) / sampleRate / snap.rate
-        }.max() ?? 0
-        let tailFrames = Int(longestPadDuration * sampleRate)
-        let totalFrames = framesPerStep * stepCount + tailFrames
+        let totalFrames = framesPerStep * stepCount
 
         // Output file
         let safeName = filename ?? "Breaks_Export_\(Int(Date().timeIntervalSince1970))"
@@ -1177,13 +1312,6 @@ class AudioEngine {
             }
         }
 
-        // Render tail so last triggered samples ring out
-        if tailFrames > 0 {
-            if !renderFrames(tailFrames) {
-                offlineEngine.stop()
-                return nil
-            }
-        }
 
         offlineEngine.stop()
         return outputURL

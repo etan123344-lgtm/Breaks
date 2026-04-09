@@ -2,7 +2,7 @@
 //  Theme.swift
 //  Breaks
 //
-//  TR-808 inspired color scheme and typography
+//  TR-808 inspired design
 //
 
 import SwiftUI

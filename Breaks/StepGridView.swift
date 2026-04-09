@@ -13,25 +13,32 @@ struct StepGridView: View {
     @State private var exportURL: URL?
     @State private var showExportNaming = false
     @State private var exportName = ""
+    @State private var currentPage: Int = 0
 
     var body: some View {
         VStack(spacing: 12) {
             transportBar
 
-            // Bar position indicator (only shown for multi-bar patterns)
+            // Bar page selector (only shown for multi-bar patterns)
             if engine.barCount > 1 {
                 HStack(spacing: 6) {
                     ForEach(0..<engine.barCount, id: \.self) { bar in
-                        let isCurrent = engine.sequencerPlaying && engine.sequencerCurrentStep / 16 == bar
-                        Text("Bar \(bar + 1)")
-                            .font(TR808.label(10, weight: isCurrent ? .bold : .medium))
-                            .foregroundStyle(isCurrent ? TR808.accent : TR808.silverDim)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(isCurrent ? TR808.accent.opacity(0.15) : Color.clear)
-                            )
+                        let isSelected = currentPage == bar
+                        let isPlaying = engine.sequencerPlaying && engine.sequencerCurrentStep / 16 == bar
+                        Button {
+                            currentPage = bar
+                        } label: {
+                            Text("Bar \(bar + 1)")
+                                .font(TR808.label(10, weight: isSelected ? .bold : .medium))
+                                .foregroundStyle(isSelected ? TR808.accent : (isPlaying ? TR808.ledOn : TR808.silverDim))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .fill(isSelected ? TR808.accent.opacity(0.15) : Color.clear)
+                                )
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -42,14 +49,12 @@ struct StepGridView: View {
                     HStack(spacing: 3) {
                         Color.clear
                             .frame(width: 44, height: 1)
-                        ForEach(0..<engine.stepCount, id: \.self) { step in
-                            if step > 0 && step % 16 == 0 {
-                                Color.clear.frame(width: 4, height: 1)
-                            }
-                            Text("\(step % 16 + 1)")
+                        ForEach(0..<16, id: \.self) { localStep in
+                            let step = currentPage * 16 + localStep
+                            Text("\(localStep + 1)")
                                 .font(TR808.readout(8))
                                 .foregroundStyle(
-                                    step % 4 == 0 ? TR808.stepColor(for: step) : TR808.silverDim
+                                    localStep % 4 == 0 ? TR808.stepColor(for: step) : TR808.silverDim
                                 )
                                 .frame(width: 28)
                         }
@@ -64,16 +69,19 @@ struct StepGridView: View {
                                 .frame(width: 44, alignment: .leading)
                                 .lineLimit(1)
 
-                            ForEach(0..<engine.stepCount, id: \.self) { step in
-                                if step > 0 && step % 16 == 0 {
-                                    Color.clear.frame(width: 4, height: 28)
-                                }
+                            ForEach(0..<16, id: \.self) { localStep in
+                                let step = currentPage * 16 + localStep
                                 stepCell(pad: pad, step: step)
                             }
                         }
                     }
                 }
                 .padding(.horizontal, 16)
+            }
+            .onChange(of: engine.barCount) { _, newCount in
+                if currentPage >= newCount {
+                    currentPage = newCount - 1
+                }
             }
 
             // Reset & Export buttons
@@ -163,13 +171,17 @@ struct StepGridView: View {
             }
 
             // Bar count selector
-            Menu {
-                ForEach(1...4, id: \.self) { count in
-                    Button("\(count) \(count == 1 ? "Bar" : "Bars")") {
-                        engine.setBarCount(count)
-                    }
+            HStack(spacing: 6) {
+                Button {
+                    engine.setBarCount(engine.barCount - 1)
+                } label: {
+                    Image(systemName: "minus")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(engine.barCount > 1 ? TR808.accent : TR808.silverDim)
+                        .frame(width: 24, height: 24)
                 }
-            } label: {
+                .disabled(engine.barCount <= 1)
+
                 VStack(spacing: 1) {
                     Text("BARS")
                         .font(TR808.label(9))
@@ -178,7 +190,17 @@ struct StepGridView: View {
                         .font(TR808.readout(18))
                         .foregroundStyle(TR808.cream)
                 }
-                .frame(width: 44)
+                .frame(width: 34)
+
+                Button {
+                    engine.setBarCount(engine.barCount + 1)
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(engine.barCount < 4 ? TR808.accent : TR808.silverDim)
+                        .frame(width: 24, height: 24)
+                }
+                .disabled(engine.barCount >= 4)
             }
         }
         .padding(.horizontal, 16)
