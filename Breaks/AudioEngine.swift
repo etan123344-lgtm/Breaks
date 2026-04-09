@@ -941,6 +941,7 @@ class AudioEngine {
         ("DT ", "drumtraks", "Sequential Circuits DrumTraks"),
         ("909 ", "tr909", "TR-909"),
         ("505 ", "tr505", "TR-505"),
+        ("SR95 ", "sr95", "Univox SR-95"),
     ]
 
     static var soundKits: [SoundKit] {

@@ -80,6 +80,15 @@
 		181E3BC92F87FC69006DCDBB /* 505 Cowbell Low.wav in Resources */ = {isa = PBXBuildFile; fileRef = 181E3BB02F87FC69006DCDBB /* 505 Cowbell Low.wav */; };
 		181E3BCA2F87FC69006DCDBB /* 505 Clap.wav in Resources */ = {isa = PBXBuildFile; fileRef = 181E3BAC2F87FC69006DCDBB /* 505 Clap.wav */; };
 		181E3BCB2F87FC69006DCDBB /* 505 Tom1.wav in Resources */ = {isa = PBXBuildFile; fileRef = 181E3BB82F87FC69006DCDBB /* 505 Tom1.wav */; };
+		181E3CDA2F88045D006DCDBB /* SR95 Perc2.wav in Resources */ = {isa = PBXBuildFile; fileRef = 181E3CD52F88045D006DCDBB /* SR95 Perc2.wav */; };
+		181E3CDB2F88045D006DCDBB /* SR95 Snare2.wav in Resources */ = {isa = PBXBuildFile; fileRef = 181E3CD82F88045D006DCDBB /* SR95 Snare2.wav */; };
+		181E3CDC2F88045D006DCDBB /* SR95 Perc1.wav in Resources */ = {isa = PBXBuildFile; fileRef = 181E3CD42F88045D006DCDBB /* SR95 Perc1.wav */; };
+		181E3CDD2F88045D006DCDBB /* SR95 CHH.wav in Resources */ = {isa = PBXBuildFile; fileRef = 181E3CD02F88045D006DCDBB /* SR95 CHH.wav */; };
+		181E3CDE2F88045D006DCDBB /* SR95 Guiro Short.wav in Resources */ = {isa = PBXBuildFile; fileRef = 181E3CD22F88045D006DCDBB /* SR95 Guiro Short.wav */; };
+		181E3CDF2F88045D006DCDBB /* SR95 Guiro Long.wav in Resources */ = {isa = PBXBuildFile; fileRef = 181E3CD12F88045D006DCDBB /* SR95 Guiro Long.wav */; };
+		181E3CE02F88045D006DCDBB /* SR95 Kick.wav in Resources */ = {isa = PBXBuildFile; fileRef = 181E3CD32F88045D006DCDBB /* SR95 Kick.wav */; };
+		181E3CE12F88045D006DCDBB /* SR95 Quijada.wav in Resources */ = {isa = PBXBuildFile; fileRef = 181E3CD62F88045D006DCDBB /* SR95 Quijada.wav */; };
+		181E3CE22F88045D006DCDBB /* SR95 Snare1.wav in Resources */ = {isa = PBXBuildFile; fileRef = 181E3CD72F88045D006DCDBB /* SR95 Snare1.wav */; };
 		1863D0792F6E394F0043032C /* Claves.wav in Resources */ = {isa = PBXBuildFile; fileRef = 1863D0622F6E394F0043032C /* Claves.wav */; };
 		1863D07A2F6E394F0043032C /* Rimshot.wav in Resources */ = {isa = PBXBuildFile; fileRef = 1863D0702F6E394F0043032C /* Rimshot.wav */; };
 		1863D07B2F6E394F0043032C /* Conga Low.wav in Resources */ = {isa = PBXBuildFile; fileRef = 1863D0642F6E394F0043032C /* Conga Low.wav */; };
@@ -180,6 +189,15 @@
 		181E3BB82F87FC69006DCDBB /* 505 Tom1.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "505 Tom1.wav"; sourceTree = "<group>"; };
 		181E3BB92F87FC69006DCDBB /* 505 Tom2.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "505 Tom2.wav"; sourceTree = "<group>"; };
 		181E3BBA2F87FC69006DCDBB /* 505 Tom3.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "505 Tom3.wav"; sourceTree = "<group>"; };
+		181E3CD02F88045D006DCDBB /* SR95 CHH.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "SR95 CHH.wav"; sourceTree = "<group>"; };
+		181E3CD12F88045D006DCDBB /* SR95 Guiro Long.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "SR95 Guiro Long.wav"; sourceTree = "<group>"; };
+		181E3CD22F88045D006DCDBB /* SR95 Guiro Short.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "SR95 Guiro Short.wav"; sourceTree = "<group>"; };
+		181E3CD32F88045D006DCDBB /* SR95 Kick.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "SR95 Kick.wav"; sourceTree = "<group>"; };
+		181E3CD42F88045D006DCDBB /* SR95 Perc1.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "SR95 Perc1.wav"; sourceTree = "<group>"; };
+		181E3CD52F88045D006DCDBB /* SR95 Perc2.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "SR95 Perc2.wav"; sourceTree = "<group>"; };
+		181E3CD62F88045D006DCDBB /* SR95 Quijada.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "SR95 Quijada.wav"; sourceTree = "<group>"; };
+		181E3CD72F88045D006DCDBB /* SR95 Snare1.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "SR95 Snare1.wav"; sourceTree = "<group>"; };
+		181E3CD82F88045D006DCDBB /* SR95 Snare2.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "SR95 Snare2.wav"; sourceTree = "<group>"; };
 		1863D0602F6E394F0043032C /* 808.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = 808.wav; sourceTree = "<group>"; };
 		1863D0612F6E394F0043032C /* Clap.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Clap.wav; sourceTree = "<group>"; };
 		1863D0622F6E394F0043032C /* Claves.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = Claves.wav; sourceTree = "<group>"; };
@@ -327,6 +345,22 @@
 			path = "Roland TR-505";
 			sourceTree = "<group>";
 		};
+		181E3CD92F88045D006DCDBB /* Univox SR-95 */ = {
+			isa = PBXGroup;
+			children = (
+				181E3CD02F88045D006DCDBB /* SR95 CHH.wav */,
+				181E3CD12F88045D006DCDBB /* SR95 Guiro Long.wav */,
+				181E3CD22F88045D006DCDBB /* SR95 Guiro Short.wav */,
+				181E3CD32F88045D006DCDBB /* SR95 Kick.wav */,
+				181E3CD42F88045D006DCDBB /* SR95 Perc1.wav */,
+				181E3CD52F88045D006DCDBB /* SR95 Perc2.wav */,
+				181E3CD62F88045D006DCDBB /* SR95 Quijada.wav */,
+				181E3CD72F88045D006DCDBB /* SR95 Snare1.wav */,
+				181E3CD82F88045D006DCDBB /* SR95 Snare2.wav */,
+			);
+			path = "Univox SR-95";
+			sourceTree = "<group>";
+		};
 		1863CFA32F6B9CC60043032C = {
 			isa = PBXGroup;
 			children = (
@@ -337,6 +371,7 @@
 				181E3B342F803D4C006DCDBB /* Sequential Circuits DrumTraks Kit */,
 				181E3B7F2F805492006DCDBB /* TR-909 Kit */,
 				181E3BBB2F87FC69006DCDBB /* Roland TR-505 */,
+				181E3CD92F88045D006DCDBB /* Univox SR-95 */,
 			);
 			sourceTree = "<group>";
 		};
@@ -515,6 +550,15 @@
 				181E3BC32F87FC69006DCDBB /* 505 Conga Hi.wav in Resources */,
 				181E3BC42F87FC69006DCDBB /* 505 Ride.wav in Resources */,
 				181E3BC52F87FC69006DCDBB /* 505 OHH.wav in Resources */,
+				181E3CDA2F88045D006DCDBB /* SR95 Perc2.wav in Resources */,
+				181E3CDB2F88045D006DCDBB /* SR95 Snare2.wav in Resources */,
+				181E3CDC2F88045D006DCDBB /* SR95 Perc1.wav in Resources */,
+				181E3CDD2F88045D006DCDBB /* SR95 CHH.wav in Resources */,
+				181E3CDE2F88045D006DCDBB /* SR95 Guiro Short.wav in Resources */,
+				181E3CDF2F88045D006DCDBB /* SR95 Guiro Long.wav in Resources */,
+				181E3CE02F88045D006DCDBB /* SR95 Kick.wav in Resources */,
+				181E3CE12F88045D006DCDBB /* SR95 Quijada.wav in Resources */,
+				181E3CE22F88045D006DCDBB /* SR95 Snare1.wav in Resources */,
 				181E3BC62F87FC69006DCDBB /* 505 Cowbell Hi.wav in Resources */,
 				181E3BC72F87FC69006DCDBB /* 505 CHH.wav in Resources */,
 				181E3BC82F87FC69006DCDBB /* 505 Snare.wav in Resources */,
