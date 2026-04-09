@@ -9,8 +9,7 @@ import SwiftUI
 
 struct StepGridView: View {
     @Bindable var engine: AudioEngine
-    @State private var showShareSheet = false
-    @State private var exportURL: URL?
+    @State private var exportItem: ShareItem?
     @State private var showExportNaming = false
     @State private var exportName = ""
     @State private var currentPage: Int = 0
@@ -116,18 +115,15 @@ struct StepGridView: View {
                 let filename = name.isEmpty ? nil : name
                 engine.exportPattern(filename: filename) { url in
                     if let url {
-                        exportURL = url
-                        showShareSheet = true
+                        exportItem = ShareItem(url: url)
                     }
                 }
             }
         } message: {
             Text("Choose a name for your exported file.")
         }
-        .sheet(isPresented: $showShareSheet) {
-            if let exportURL {
-                ShareSheetView(items: [exportURL])
-            }
+        .sheet(item: $exportItem) { item in
+            ShareSheetView(items: [item.url])
         }
     }
 
@@ -248,6 +244,11 @@ struct StepGridView: View {
         }
         return String(label.prefix(5))
     }
+}
+
+struct ShareItem: Identifiable {
+    let id = UUID()
+    let url: URL
 }
 
 struct ShareSheetView: UIViewControllerRepresentable {
