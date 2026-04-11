@@ -10,7 +10,6 @@ import AVFAudio
 
 struct MixerView: View {
     @Bindable var engine: AudioEngine
-    @State private var showDelaySettings = false
 
     var body: some View {
         VStack(spacing: 24) {
@@ -34,29 +33,6 @@ struct MixerView: View {
                     color: TR808.accent,
                     onChange: { engine.updateSweetMix($0) }
                 )
-
-                VStack(spacing: 12) {
-                    mixerChannel(
-                        label: "DELAY",
-                        value: engine.delayMix,
-                        color: TR808.accent,
-                        onChange: { engine.updateDelayMix($0) }
-                    )
-
-                    Button {
-                        showDelaySettings = true
-                    } label: {
-                        Text("Settings")
-                            .font(TR808.label(9, weight: .bold))
-                            .foregroundStyle(TR808.accent)
-                            .frame(width: 60)
-                            .padding(.vertical, 6)
-                            .background(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .fill(TR808.surface)
-                            )
-                    }
-                }
 
                 VStack(spacing: 12) {
                     mixerChannel(
@@ -92,9 +68,6 @@ struct MixerView: View {
         }
         .background(TR808.bg)
         .preferredColorScheme(.dark)
-        .sheet(isPresented: $showDelaySettings) {
-            DelaySettingsSheet(engine: engine)
-        }
     }
 
     private func mixerChannel(label: String, value: Float, color: Color, onChange: @escaping (Float) -> Void) -> some View {
@@ -203,114 +176,6 @@ struct MixerView: View {
 
     static func reverbPresetName(_ preset: AVAudioUnitReverbPreset) -> String {
         reverbPresets.first { $0.value == preset }?.name ?? "Unknown"
-    }
-}
-
-// MARK: - Delay Settings Sheet
-
-struct DelaySettingsSheet: View {
-    @Bindable var engine: AudioEngine
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 28) {
-                // Header stripe
-                Rectangle()
-                    .fill(TR808.accent)
-                    .frame(height: 3)
-                    .padding(.horizontal, 20)
-
-                Text("DELAY SETTINGS")
-                    .font(TR808.label(13))
-                    .foregroundStyle(TR808.silver)
-                    .tracking(2)
-
-                VStack(spacing: 24) {
-                    // Delay Time
-                    VStack(spacing: 8) {
-                        HStack {
-                            Text("TIME")
-                                .font(TR808.label(11, weight: .bold))
-                                .foregroundStyle(TR808.silver)
-                            Spacer()
-                            Text(String(format: "%.0f ms", engine.delayTime * 1000))
-                                .font(TR808.readout(14))
-                                .foregroundStyle(TR808.cream)
-                        }
-                        Slider(
-                            value: Binding(
-                                get: { engine.delayTime },
-                                set: { engine.updateDelayTime($0) }
-                            ),
-                            in: 0...2
-                        )
-                        .tint(TR808.accent)
-                    }
-
-                    // Feedback
-                    VStack(spacing: 8) {
-                        HStack {
-                            Text("FEEDBACK")
-                                .font(TR808.label(11, weight: .bold))
-                                .foregroundStyle(TR808.silver)
-                            Spacer()
-                            Text(String(format: "%.0f%%", engine.delayFeedback))
-                                .font(TR808.readout(14))
-                                .foregroundStyle(TR808.cream)
-                        }
-                        Slider(
-                            value: Binding(
-                                get: { engine.delayFeedback },
-                                set: { engine.updateDelayFeedback($0) }
-                            ),
-                            in: -100...100
-                        )
-                        .tint(TR808.accent)
-                    }
-
-                    // Low Pass Cutoff
-                    VStack(spacing: 8) {
-                        HStack {
-                            Text("LOW PASS")
-                                .font(TR808.label(11, weight: .bold))
-                                .foregroundStyle(TR808.silver)
-                            Spacer()
-                            Text(Self.formatFrequency(engine.delayLowPassCutoff))
-                                .font(TR808.readout(14))
-                                .foregroundStyle(TR808.cream)
-                        }
-                        Slider(
-                            value: Binding(
-                                get: { engine.delayLowPassCutoff },
-                                set: { engine.updateDelayLowPassCutoff($0) }
-                            ),
-                            in: 10...20000
-                        )
-                        .tint(TR808.accent)
-                    }
-                }
-                .padding(.horizontal, 24)
-
-                Spacer()
-            }
-            .background(TR808.bg)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                        .foregroundStyle(TR808.accent)
-                }
-            }
-        }
-        .preferredColorScheme(.dark)
-    }
-
-    private static func formatFrequency(_ hz: Float) -> String {
-        if hz >= 1000 {
-            return String(format: "%.1f kHz", hz / 1000)
-        } else {
-            return String(format: "%.0f Hz", hz)
-        }
     }
 }
 

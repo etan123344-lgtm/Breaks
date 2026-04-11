@@ -525,27 +525,59 @@ struct SoundBrowserSheet: View {
     let padIndex: Int
     @Environment(\.dismiss) private var dismiss
 
+    @State private var showNewKitAlert = false
+    @State private var newKitName = ""
+    @State private var renameKit: AudioEngine.SoundKit?
+    @State private var renameKitName = ""
+    @State private var errorMessage: String?
+
     var body: some View {
         NavigationStack {
-            List(AudioEngine.soundKits) { kit in
-                NavigationLink {
-                    SoundKitListView(engine: engine, kit: kit, padIndex: padIndex, dismiss: dismiss)
-                } label: {
-                    HStack {
-                        Image(systemName: "folder.fill")
-                            .foregroundStyle(TR808.accent)
-                            .frame(width: 28)
-                        Text(kit.name)
-                            .font(TR808.label(15, weight: .semibold))
-                            .foregroundStyle(TR808.cream)
-                        Spacer()
-                        Text("\(kit.sounds.count)")
-                            .font(TR808.label(12))
-                            .foregroundStyle(TR808.silverDim)
+            List {
+                ForEach(engine.soundKits) { kit in
+                    NavigationLink {
+                        SoundKitListView(engine: engine, kit: kit, padIndex: padIndex, dismiss: dismiss)
+                    } label: {
+                        HStack {
+                            Image(systemName: kit.isUserKit ? "folder.badge.person.crop" : "folder.fill")
+                                .foregroundStyle(TR808.accent)
+                                .frame(width: 28)
+                            Text(kit.name)
+                                .font(TR808.label(15, weight: .semibold))
+                                .foregroundStyle(TR808.cream)
+                            Spacer()
+                            Text("\(kit.sounds.count)")
+                                .font(TR808.label(12))
+                                .foregroundStyle(TR808.silverDim)
+                        }
+                        .padding(.vertical, 6)
                     }
-                    .padding(.vertical, 6)
+                    .listRowBackground(TR808.surface)
+                    .contextMenu {
+                        if kit.isUserKit {
+                            Button {
+                                renameKitName = kit.name
+                                renameKit = kit
+                            } label: {
+                                Label("Rename", systemImage: "pencil")
+                            }
+                            Button(role: .destructive) {
+                                engine.deleteUserKit(kit)
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+                    }
+                    .swipeActions(edge: .trailing) {
+                        if kit.isUserKit {
+                            Button(role: .destructive) {
+                                engine.deleteUserKit(kit)
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+                    }
                 }
-                .listRowBackground(TR808.surface)
             }
             .listStyle(.plain)
             .background(TR808.bg)
@@ -553,6 +585,16 @@ struct SoundBrowserSheet: View {
             .navigationTitle("SOUND KITS")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        newKitName = ""
+                        showNewKitAlert = true
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(TR808.label(15, weight: .semibold))
+                            .foregroundStyle(TR808.accent)
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Cancel") { dismiss() }
                         .font(TR808.label(15, weight: .semibold))
@@ -564,6 +606,42 @@ struct SoundBrowserSheet: View {
         }
         .preferredColorScheme(.dark)
         .onDisappear { engine.stopPreview() }
+        .alert("New Sound Kit", isPresented: $showNewKitAlert) {
+            TextField("Kit name", text: $newKitName)
+                .autocorrectionDisabled()
+            Button("Cancel", role: .cancel) { }
+            Button("Create") {
+                if !engine.createUserKit(named: newKitName) {
+                    errorMessage = "Could not create kit. The name may be empty or already in use."
+                }
+            }
+        } message: {
+            Text("Enter a name for your new sound kit.")
+        }
+        .alert("Rename Kit", isPresented: Binding(
+            get: { renameKit != nil },
+            set: { if !$0 { renameKit = nil } }
+        )) {
+            TextField("Kit name", text: $renameKitName)
+                .autocorrectionDisabled()
+            Button("Cancel", role: .cancel) { renameKit = nil }
+            Button("Rename") {
+                if let kit = renameKit, !engine.renameUserKit(kit, to: renameKitName) {
+                    errorMessage = "Could not rename kit. The name may be empty or already in use."
+                }
+                renameKit = nil
+            }
+        } message: {
+            Text("Enter a new name for this kit.")
+        }
+        .alert("Error", isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { errorMessage = nil }
+        } message: {
+            Text(errorMessage ?? "")
+        }
     }
 }
 
@@ -573,47 +651,144 @@ struct SoundKitListView: View {
     let padIndex: Int
     let dismiss: DismissAction
 
+    @State private var showImporter = false
+    @State private var renameSound: AudioEngine.BundledSound?
+    @State private var renameSoundName = ""
+    @State private var errorMessage: String?
+
+    /// Look up the current kit by id so the view stays in sync after renames/imports.
+    private var currentKit: AudioEngine.SoundKit {
+        engine.soundKits.first(where: { $0.id == kit.id }) ?? kit
+    }
+
     var body: some View {
-        List(kit.sounds) { sound in
-            HStack {
-                Button {
-                    engine.previewSound(sound)
-                } label: {
-                    HStack {
-                        Image(systemName: "play.fill")
+        List {
+            ForEach(currentKit.sounds) { sound in
+                HStack {
+                    Button {
+                        engine.previewSound(sound)
+                    } label: {
+                        HStack {
+                            Image(systemName: "play.fill")
+                                .foregroundStyle(TR808.accent)
+                                .frame(width: 24)
+                            Text(sound.name)
+                                .font(TR808.label(14))
+                                .foregroundStyle(TR808.cream)
+                        }
+                    }
+                    .buttonStyle(.plain)
+
+                    Spacer()
+
+                    Button {
+                        engine.stopPreview()
+                        engine.loadBundledSound(sound, intoPad: padIndex)
+                        dismiss()
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 22))
                             .foregroundStyle(TR808.accent)
-                            .frame(width: 24)
-                        Text(sound.name)
-                            .font(TR808.label(14))
-                            .foregroundStyle(TR808.cream)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.vertical, 4)
+                .listRowBackground(TR808.surface)
+                .contextMenu {
+                    if currentKit.isUserKit {
+                        Button {
+                            renameSoundName = sound.name
+                            renameSound = sound
+                        } label: {
+                            Label("Rename", systemImage: "pencil")
+                        }
+                        Button(role: .destructive) {
+                            engine.deleteSample(sound, fromUserKit: currentKit)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
                     }
                 }
-                .buttonStyle(.plain)
-
-                Spacer()
-
-                Button {
-                    engine.stopPreview()
-                    engine.loadBundledSound(sound, intoPad: padIndex)
-                    dismiss()
-                } label: {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 22))
-                        .foregroundStyle(TR808.accent)
+                .swipeActions(edge: .trailing) {
+                    if currentKit.isUserKit {
+                        Button(role: .destructive) {
+                            engine.deleteSample(sound, fromUserKit: currentKit)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
                 }
-                .buttonStyle(.plain)
             }
-            .padding(.vertical, 4)
-            .listRowBackground(TR808.surface)
+
+            if currentKit.isUserKit && currentKit.sounds.isEmpty {
+                Text("No samples yet. Tap + to import audio files.")
+                    .font(TR808.label(13))
+                    .foregroundStyle(TR808.silverDim)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 24)
+                    .listRowBackground(Color.clear)
+            }
         }
         .listStyle(.plain)
         .background(TR808.bg)
         .scrollContentBackground(.hidden)
-        .navigationTitle(kit.name.uppercased())
+        .navigationTitle(currentKit.name.uppercased())
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if currentKit.isUserKit {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showImporter = true
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(TR808.label(15, weight: .semibold))
+                            .foregroundStyle(TR808.accent)
+                    }
+                }
+            }
+        }
         .toolbarBackground(TR808.surface, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .onDisappear { engine.stopPreview() }
+        .fileImporter(
+            isPresented: $showImporter,
+            allowedContentTypes: [.audio],
+            allowsMultipleSelection: true
+        ) { result in
+            switch result {
+            case .success(let urls):
+                let count = engine.importSamples(from: urls, intoUserKit: currentKit)
+                if count == 0 {
+                    errorMessage = "No supported audio files were imported."
+                }
+            case .failure(let error):
+                errorMessage = error.localizedDescription
+            }
+        }
+        .alert("Rename Sample", isPresented: Binding(
+            get: { renameSound != nil },
+            set: { if !$0 { renameSound = nil } }
+        )) {
+            TextField("Sample name", text: $renameSoundName)
+                .autocorrectionDisabled()
+            Button("Cancel", role: .cancel) { renameSound = nil }
+            Button("Rename") {
+                if let sound = renameSound, !engine.renameSample(sound, to: renameSoundName, in: currentKit) {
+                    errorMessage = "Could not rename sample. The name may be empty or already in use."
+                }
+                renameSound = nil
+            }
+        } message: {
+            Text("Enter a new name for this sample.")
+        }
+        .alert("Error", isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { errorMessage = nil }
+        } message: {
+            Text(errorMessage ?? "")
+        }
     }
 }
 

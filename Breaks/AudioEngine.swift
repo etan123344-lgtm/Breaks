@@ -276,10 +276,6 @@ class AudioEngine {
     var sweetMix: Float = 0.0
     var reverbMix: Float = 0.0
     var reverbPreset: AVAudioUnitReverbPreset = .smallRoom
-    var delayMix: Float = 0.0
-    var delayTime: Float = 0.3          // seconds, 0–2
-    var delayFeedback: Float = 50.0     // percent, -100–100
-    var delayLowPassCutoff: Float = 15000 // Hz, 10–(sampleRate/2)
 
     // MARK: - Audio Engine
     private var engine = AVAudioEngine()
@@ -291,7 +287,6 @@ class AudioEngine {
     private var sweetEffect: AVAudioUnit?
     private var sweetAU: SweetEffectAU?
     private var reverbNode: AVAudioUnitReverb?
-    private var delayNode: AVAudioUnitDelay?
     private var submixer: AVAudioMixerNode?
     private var engineSampleRate: Double = 44100
     private var playerFormat: AVAudioFormat!
@@ -326,6 +321,7 @@ class AudioEngine {
         padBuffers = Array(repeating: nil, count: 8)
         setupAudio()
         setupInterruptionHandling()
+        refreshSoundKits()
     }
 
     private func setupInterruptionHandling() {
@@ -428,20 +424,10 @@ class AudioEngine {
         reverbNode = reverb
         engine.attach(reverb)
 
-        // Delay
-        let delay = AVAudioUnitDelay()
-        delay.wetDryMix = 0
-        delay.delayTime = TimeInterval(delayTime)
-        delay.feedback = delayFeedback
-        delay.lowPassCutoff = delayLowPassCutoff
-        delayNode = delay
-        engine.attach(delay)
-
-        // Signal chain: submixer -> EQ -> Sweet -> Delay -> Reverb -> mainMixer
+        // Signal chain: submixer -> EQ -> Sweet -> Reverb -> mainMixer
         engine.connect(sub, to: eq, format: stereoFormat)
         engine.connect(eq, to: sweetNode, format: stereoFormat)
-        engine.connect(sweetNode, to: delay, format: stereoFormat)
-        engine.connect(delay, to: reverb, format: stereoFormat)
+        engine.connect(sweetNode, to: reverb, format: stereoFormat)
         engine.connect(reverb, to: mainMixer, format: stereoFormat)
 
         do {
@@ -934,7 +920,20 @@ class AudioEngine {
         let id: String
         let name: String
         let sounds: [BundledSound]
+        let isUserKit: Bool
+        let directoryURL: URL?  // for user kits, the folder on disk
+
+        init(id: String, name: String, sounds: [BundledSound], isUserKit: Bool = false, directoryURL: URL? = nil) {
+            self.id = id
+            self.name = name
+            self.sounds = sounds
+            self.isUserKit = isUserKit
+            self.directoryURL = directoryURL
+        }
     }
+
+    /// Audio file extensions allowed for user-imported samples.
+    static let supportedAudioExtensions: Set<String> = ["wav", "aif", "aiff", "m4a", "mp3", "caf"]
 
     private static let kitPrefixes: [(prefix: String, id: String, name: String)] = [
         ("LD ", "linndrum", "LinnDrum"),
@@ -944,31 +943,179 @@ class AudioEngine {
         ("SR95 ", "sr95", "Univox SR-95"),
     ]
 
-    static var soundKits: [SoundKit] {
-        guard let urls = Bundle.main.urls(forResourcesWithExtension: "wav", subdirectory: nil) else {
-            return []
+    var soundKits: [SoundKit] = []
+
+    /// Documents/UserKits — root directory for user-created sound kits.
+    var userKitsDirectory: URL {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let dir = docs.appendingPathComponent("UserKits", isDirectory: true)
+        if !FileManager.default.fileExists(atPath: dir.path) {
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         }
-        var kitSounds: [String: [BundledSound]] = [:]
-        var tr808: [BundledSound] = []
-        for url in urls {
-            let filename = url.deletingPathExtension().lastPathComponent
-            if let match = kitPrefixes.first(where: { filename.hasPrefix($0.prefix) }) {
-                let name = String(filename.dropFirst(match.prefix.count))
-                kitSounds[match.id, default: []].append(BundledSound(id: filename, name: name, url: url))
-            } else {
-                tr808.append(BundledSound(id: filename, name: filename, url: url))
-            }
-        }
-        tr808.sort { $0.name < $1.name }
+        return dir
+    }
+
+    /// Rebuild `soundKits` from the bundle and the user kits directory.
+    func refreshSoundKits() {
         var kits: [SoundKit] = []
-        if !tr808.isEmpty { kits.append(SoundKit(id: "tr808", name: "TR-808", sounds: tr808)) }
-        for entry in kitPrefixes {
-            if var sounds = kitSounds[entry.id], !sounds.isEmpty {
-                sounds.sort { $0.name < $1.name }
-                kits.append(SoundKit(id: entry.id, name: entry.name, sounds: sounds))
+
+        // Built-in kits from the bundle
+        if let urls = Bundle.main.urls(forResourcesWithExtension: "wav", subdirectory: nil) {
+            var kitSounds: [String: [BundledSound]] = [:]
+            var tr808: [BundledSound] = []
+            for url in urls {
+                let filename = url.deletingPathExtension().lastPathComponent
+                if let match = Self.kitPrefixes.first(where: { filename.hasPrefix($0.prefix) }) {
+                    let name = String(filename.dropFirst(match.prefix.count))
+                    kitSounds[match.id, default: []].append(BundledSound(id: filename, name: name, url: url))
+                } else {
+                    tr808.append(BundledSound(id: filename, name: filename, url: url))
+                }
+            }
+            tr808.sort { $0.name < $1.name }
+            if !tr808.isEmpty { kits.append(SoundKit(id: "tr808", name: "TR-808", sounds: tr808)) }
+            for entry in Self.kitPrefixes {
+                if var sounds = kitSounds[entry.id], !sounds.isEmpty {
+                    sounds.sort { $0.name < $1.name }
+                    kits.append(SoundKit(id: entry.id, name: entry.name, sounds: sounds))
+                }
             }
         }
-        return kits
+
+        // User kits from Documents/UserKits — each subdirectory is a kit
+        let fm = FileManager.default
+        if let kitDirs = try? fm.contentsOfDirectory(at: userKitsDirectory, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]) {
+            let userKits = kitDirs
+                .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
+                .sorted { $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent) == .orderedAscending }
+            for dir in userKits {
+                let kitName = dir.lastPathComponent
+                let files = (try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? []
+                let sounds = files
+                    .filter { Self.supportedAudioExtensions.contains($0.pathExtension.lowercased()) }
+                    .sorted { $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent) == .orderedAscending }
+                    .map { url -> BundledSound in
+                        let name = url.deletingPathExtension().lastPathComponent
+                        return BundledSound(id: "user/\(kitName)/\(url.lastPathComponent)", name: name, url: url)
+                    }
+                kits.append(SoundKit(id: "user_\(kitName)", name: kitName, sounds: sounds, isUserKit: true, directoryURL: dir))
+            }
+        }
+
+        soundKits = kits
+    }
+
+    // MARK: - User Kit Management
+
+    @discardableResult
+    func createUserKit(named name: String) -> Bool {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        let dir = userKitsDirectory.appendingPathComponent(trimmed, isDirectory: true)
+        guard !FileManager.default.fileExists(atPath: dir.path) else { return false }
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            refreshSoundKits()
+            return true
+        } catch {
+            print("Failed to create user kit: \(error)")
+            return false
+        }
+    }
+
+    @discardableResult
+    func deleteUserKit(_ kit: SoundKit) -> Bool {
+        guard kit.isUserKit, let dir = kit.directoryURL else { return false }
+        do {
+            try FileManager.default.removeItem(at: dir)
+            refreshSoundKits()
+            return true
+        } catch {
+            print("Failed to delete user kit: \(error)")
+            return false
+        }
+    }
+
+    @discardableResult
+    func renameUserKit(_ kit: SoundKit, to newName: String) -> Bool {
+        guard kit.isUserKit, let dir = kit.directoryURL else { return false }
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        let newDir = dir.deletingLastPathComponent().appendingPathComponent(trimmed, isDirectory: true)
+        guard !FileManager.default.fileExists(atPath: newDir.path) else { return false }
+        do {
+            try FileManager.default.moveItem(at: dir, to: newDir)
+            refreshSoundKits()
+            return true
+        } catch {
+            print("Failed to rename user kit: \(error)")
+            return false
+        }
+    }
+
+    /// Copy one or more audio files into a user kit's directory.
+    /// Returns the number of files successfully imported.
+    @discardableResult
+    func importSamples(from sourceURLs: [URL], intoUserKit kit: SoundKit) -> Int {
+        guard kit.isUserKit, let dir = kit.directoryURL else { return 0 }
+        var imported = 0
+        for src in sourceURLs {
+            guard Self.supportedAudioExtensions.contains(src.pathExtension.lowercased()) else { continue }
+            let needsScope = src.startAccessingSecurityScopedResource()
+            defer { if needsScope { src.stopAccessingSecurityScopedResource() } }
+
+            // Resolve filename collisions by appending " (n)"
+            var dest = dir.appendingPathComponent(src.lastPathComponent)
+            if FileManager.default.fileExists(atPath: dest.path) {
+                let baseName = src.deletingPathExtension().lastPathComponent
+                let ext = src.pathExtension
+                var n = 2
+                while FileManager.default.fileExists(atPath: dest.path) {
+                    dest = dir.appendingPathComponent("\(baseName) (\(n)).\(ext)")
+                    n += 1
+                }
+            }
+
+            do {
+                try FileManager.default.copyItem(at: src, to: dest)
+                imported += 1
+            } catch {
+                print("Failed to import \(src.lastPathComponent): \(error)")
+            }
+        }
+        if imported > 0 { refreshSoundKits() }
+        return imported
+    }
+
+    @discardableResult
+    func deleteSample(_ sound: BundledSound, fromUserKit kit: SoundKit) -> Bool {
+        guard kit.isUserKit else { return false }
+        do {
+            try FileManager.default.removeItem(at: sound.url)
+            refreshSoundKits()
+            return true
+        } catch {
+            print("Failed to delete sample: \(error)")
+            return false
+        }
+    }
+
+    @discardableResult
+    func renameSample(_ sound: BundledSound, to newName: String, in kit: SoundKit) -> Bool {
+        guard kit.isUserKit else { return false }
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        let ext = sound.url.pathExtension
+        let newURL = sound.url.deletingLastPathComponent().appendingPathComponent("\(trimmed).\(ext)")
+        guard !FileManager.default.fileExists(atPath: newURL.path) else { return false }
+        do {
+            try FileManager.default.moveItem(at: sound.url, to: newURL)
+            refreshSoundKits()
+            return true
+        } catch {
+            print("Failed to rename sample: \(error)")
+            return false
+        }
     }
 
     func loadBundledSound(_ sound: BundledSound, intoPad padIndex: Int) {
@@ -1013,26 +1160,6 @@ class AudioEngine {
         reverbNode?.loadFactoryPreset(preset)
     }
 
-    func updateDelayMix(_ value: Float) {
-        delayMix = value
-        delayNode?.wetDryMix = value * 100
-    }
-
-    func updateDelayTime(_ value: Float) {
-        delayTime = value
-        delayNode?.delayTime = TimeInterval(value)
-    }
-
-    func updateDelayFeedback(_ value: Float) {
-        delayFeedback = value
-        delayNode?.feedback = value
-    }
-
-    func updateDelayLowPassCutoff(_ value: Float) {
-        delayLowPassCutoff = value
-        delayNode?.lowPassCutoff = value
-    }
-
     // MARK: - Export
 
     var isExporting = false
@@ -1060,10 +1187,6 @@ class AudioEngine {
         let sweetMix = self.sweetMix
         let reverbMix = self.reverbMix
         let reverbPreset = self.reverbPreset
-        let delayMix = self.delayMix
-        let delayTime = self.delayTime
-        let delayFeedback = self.delayFeedback
-        let delayLowPassCutoff = self.delayLowPassCutoff
         let sampleRate = self.engineSampleRate
 
         // Snapshot per-pad state and buffers (nil = pad has no audio)
@@ -1117,10 +1240,6 @@ class AudioEngine {
                 sweetMix: sweetMix,
                 reverbMix: reverbMix,
                 reverbPreset: reverbPreset,
-                delayMix: delayMix,
-                delayTime: delayTime,
-                delayFeedback: delayFeedback,
-                delayLowPassCutoff: delayLowPassCutoff,
                 sampleRate: sampleRate,
                 filename: exportFilename
             )
@@ -1144,10 +1263,6 @@ class AudioEngine {
         sweetMix: Float,
         reverbMix: Float,
         reverbPreset: AVAudioUnitReverbPreset,
-        delayMix: Float,
-        delayTime: Float,
-        delayFeedback: Float,
-        delayLowPassCutoff: Float,
         sampleRate: Double,
         filename: String? = nil
     ) -> URL? {
@@ -1225,20 +1340,11 @@ class AudioEngine {
         reverb.wetDryMix = reverbMix * 100
         offlineEngine.attach(reverb)
 
-        // Delay
-        let delay = AVAudioUnitDelay()
-        delay.wetDryMix = delayMix * 100
-        delay.delayTime = TimeInterval(delayTime)
-        delay.feedback = delayFeedback
-        delay.lowPassCutoff = delayLowPassCutoff
-        offlineEngine.attach(delay)
-
-        // Signal chain: sub -> EQ -> Sweet -> Delay -> Reverb -> mainMixer
+        // Signal chain: sub -> EQ -> Sweet -> Reverb -> mainMixer
         let mainMixer = offlineEngine.mainMixerNode
         offlineEngine.connect(sub, to: eq, format: stereoFormat)
         offlineEngine.connect(eq, to: sweetNode, format: stereoFormat)
-        offlineEngine.connect(sweetNode, to: delay, format: stereoFormat)
-        offlineEngine.connect(delay, to: reverb, format: stereoFormat)
+        offlineEngine.connect(sweetNode, to: reverb, format: stereoFormat)
         offlineEngine.connect(reverb, to: mainMixer, format: stereoFormat)
 
         do {
